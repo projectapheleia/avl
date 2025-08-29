@@ -40,7 +40,12 @@ Variables
 Similar to the UVM config_db / resource_db variables can be set and retrieved from the factory. \
 No copying is done automatically, classes are passed by reference and literals by value. \
 
-This means :doc:`avl.Var </modules/avl._core.var>` objects can be easily shared, as can cocotb hdl handles.
+The factory supports the sharing of any type via the :doc:`Factory.set_variable </modules/avl._core.factory>` \
+and :doc:`Factory.get_variable </modules/avl._core.factory>` methods as shown below. \
+For instance, :doc:`avl.Var </modules/avl._core.var>` objects can be easily shared, as can cocotb hdl handles. \
+
+When getting a variable, a default value may be used if provided. 
+
 
 The same wildcards as for the override by instance are supported :any:`Factory.specificity`. \
 
