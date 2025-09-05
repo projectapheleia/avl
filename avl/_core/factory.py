@@ -144,6 +144,7 @@ class Factory:
         :type default: Any
         :param path: The path to the variable.
         :type path: str
+        :raises KeyError: when there is no match and no default
         :return: The value of the variable or the default value.
         :rtype: Any
         """
