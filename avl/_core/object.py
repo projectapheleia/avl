@@ -216,8 +216,13 @@ class Object:
         self._min_values_ = {}
 
         # Logger - Make all logger functions available in class to simplify code
-        for i in ["debug", "info", "warn", "warning", "error", "critical", "fatal"]:
-            setattr(self, i, getattr(Log, i))
+        self.debug = Log.debug
+        self.info = Log.info
+        self.warn = Log.warn
+        self.warning = Log.warning
+        self.error = Log.error
+        self.critical = Log.critical
+        self.fatal = Log.fatal
 
         # Table format for string representation
         self._table_fmt_ = "grid"
