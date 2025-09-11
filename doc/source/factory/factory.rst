@@ -40,8 +40,15 @@ Variables
 Similar to the UVM config_db / resource_db variables can be set and retrieved from the factory. \
 No copying is done automatically, classes are passed by reference and literals by value. \
 
-This means :doc:`avl.Var </modules/avl._core.var>` objects can be easily shared, as can cocotb hdl handles.
+The :doc:`Factory.set_variable </modules/avl._core.factory>` method adds a variable to the \
+factory at a path. Wildcards are allowed in the path. When the :doc:`Factory.get_variable </modules/avl._core.factory>` \
+method is called, it will attempt to match the provided path to the existing paths in the factory. \
+If a match is found, it will return the associated value. If multiple matches are found, the Factory will use the \
+:doc:`Factory.specificity </modules/avl._core.factory>` method on the matching paths to determine which path \
+is the most specific, then it will return the value associated with that path. \  
+Otherwise, it will return a default value. If no default value is provided, it will raise a `KeyError <https://docs.python.org/3/library/exceptions.html>`_.
 
-The same wildcards as for the override by instance are supported :any:`Factory.specificity`. \
+The Factory can be useful for sharing :doc:`avl.Var </modules/avl._core.var>` objects, cocotb hdl handles, 
+and configurations for components.
 
 .. literalinclude:: ../../../examples/factory/variables/cocotb/example.py

@@ -11,6 +11,7 @@ class Factory:
     _by_type = {}
     _by_instance = {}
     _variables = {}
+    _sentinal = object()
 
     @staticmethod
     def specificity(pattern : str) -> int:
@@ -135,15 +136,16 @@ class Factory:
             Factory._variables[path] = value
 
     @staticmethod
-    def get_variable(path: str, original: Any) -> Any:
+    def get_variable(path: str, default: Any=_sentinal) -> Any:
         """
-        Get the value of a variable by its path if it exists, otherwise return the original value.
+        Get the value of a variable by its path if it exists, otherwise return the default value.
 
-        :param original: The original value to return if no match is found.
-        :type original: Any
+        :param defautl: The default value to return if no match is found.
+        :type default: Any
         :param path: The path to the variable.
         :type path: str
-        :return: The value of the variable or the original value.
+        :raises KeyError: when there is no match and no default
+        :return: The value of the variable or the default value.
         :rtype: Any
         """
         matches = [value for value in Factory._variables if fnmatch.fnmatch(path, value)]
@@ -151,8 +153,11 @@ class Factory:
         if matches:
             closest_match = max(matches, key=Factory.specificity)
             return Factory._variables[closest_match]
+        elif default is not Factory._sentinal:
+            return default
         else:
-            return original
+            raise KeyError(f"No variable in the factory matches Path argument ({path}), \
+                and no default value is provided.")
 
 
 __all__ = ["Factory"]
