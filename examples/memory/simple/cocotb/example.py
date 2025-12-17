@@ -76,12 +76,43 @@ class example_env(avl.Env):
         assert mem.read(0x0100, 4) == 0x56783412
         self.info("Test 2 passed: Little-endian write and read back successful.")
 
-        # Test 2 : Write with strobe
-        mem.write(0x0200, 0xdeadbeef, 4, strobe=0b11)
+        # Test 3 : Write with strobe
+        mem.write(0x0200, 0xdeadbeef, strobe=0b11)
         assert mem.read(0x0200, 4) == 0xbeef
-        mem.write(0x0200, 0xcafebabe, 4, strobe=0b1000)
+        mem.write(0x0200, 0xcafebabe, strobe=0b1000)
         assert mem.read(0x0200, 4) == 0xca00beef
         self.info("Test 3 passed: Little-endian write strobe and read back successful.")
+
+        # Test 4 : Rotation
+        mem.write(0x0300, 0x76543210, 4)
+        mem.write(0x0304, 0xfedcba98, 4)
+        assert mem.read(0x0300, 4) == 0x76543210
+        assert mem.read(0x301, 4, rotated=False) == 0x98765432
+        assert mem.read(0x301, 4, rotated=True) == 0x76543210
+        assert mem.read(0x302, 4, rotated=True) == 0x76543210
+        assert mem.read(0x303, 4, rotated=True) == 0x76543210
+
+        assert mem.read(0x0300, 1, rotated=True) == 0x00000010
+        assert mem.read(0x0301, 1, rotated=True) == 0x00003200
+        assert mem.read(0x0302, 1, rotated=True) == 0x00540000
+        assert mem.read(0x0303, 1, rotated=True) == 0x76000000
+
+        assert mem.read(0x0300, 2, rotated=True) == 0x00003210
+        assert mem.read(0x0301, 2, rotated=True) == 0x00543200
+        assert mem.read(0x0302, 2, rotated=True) == 0x76540000
+        assert mem.read(0x0303, 2, rotated=True) == 0x76000010
+
+        assert mem.read(0x0300, 3, rotated=True) == 0x00543210
+        assert mem.read(0x0301, 3, rotated=True) == 0x76543200
+        assert mem.read(0x0302, 3, rotated=True) == 0x76540010
+        assert mem.read(0x0303, 3, rotated=True) == 0x76003210
+
+        mem.write(0x0401, 0x76543210, strobe=0b0010, rotated=True)
+        assert mem.read(0x0400, 4) == 0x00003200
+        mem.write(0x0402, 0xdeadbeef, strobe=0b1101, rotated=True)
+        assert mem.read(0x0400, 4) == 0xdead32ef
+
+        self.info("Test 4 passed: Little-endian rotation successful.")
 
     def test_big_endian(self):
         self.info("Testing big-endian memory operations...")
@@ -92,28 +123,59 @@ class example_env(avl.Env):
 
         # Test 1 : Write and read back in little-endian
         mem.write(0x0000, 0x12345678)
-        assert mem.read(0x0000, 1) == 0x12
-        assert mem.read(0x0000, 2) == 0x1234
+        assert mem.read(0x0000, 1) == 0x12000000
+        assert mem.read(0x0000, 2) == 0x12340000
         assert mem.read(0x0000, 4) == 0x12345678
         self.info("Test 1 passed: Big-endian write and read back successful.")
 
         # Test 2 : Write big-endian and read back
         mem.write(0x0100, 0x12, 1)
-        assert mem.read(0x0100, 1) == 0x12
+        assert mem.read(0x0100, 1) == 0x12000000
 
         mem.write(0x0101, 0x34, 1)
-        assert mem.read(0x0100, 2) == 0x1234
+        assert mem.read(0x0100, 2) == 0x12340000
 
         mem.write(0x0102, 0x5678, 2)
         assert mem.read(0x0100, 4) == 0x12345678
         self.info("Test 2 passed: Big-endian write and read back successful.")
 
-        # Test 2 : Write with strobe
-        mem.write(0x0200, 0xdeadbeef, 4, strobe=0b11)
-        assert mem.read(0x0200, 4) == 0xbeef
-        mem.write(0x0200, 0xcafebabe, 4, strobe=0b1000)
-        assert mem.read(0x0200, 4) == 0xca00beef
+        # Test 3 : Write with strobe
+        mem.write(0x0200, 0xdeadbeef, strobe=0b1100)
+        assert mem.read(0x0200, 4) == 0xdead0000
+        mem.write(0x0200, 0xcafebabe, strobe=0b0001)
+        assert mem.read(0x0200, 4) == 0xdead00be
         self.info("Test 3 passed: Big-endian write strobe and read back successful.")
+
+        # Test 4 : Rotation
+        mem.write(0x0300, 0x76543210, 4)
+        mem.write(0x0304, 0xfedcba98, 4)
+        assert mem.read(0x0300, 4) == 0x76543210
+        assert mem.read(0x301, 4, rotated=False) == 0x543210fe
+        assert mem.read(0x301, 4, rotated=True) == 0x76543210
+        assert mem.read(0x302, 4, rotated=True) == 0x76543210
+        assert mem.read(0x303, 4, rotated=True) == 0x76543210
+
+        assert mem.read(0x0300, 1, rotated=True) == 0x76000000
+        assert mem.read(0x0301, 1, rotated=True) == 0x00540000
+        assert mem.read(0x0302, 1, rotated=True) == 0x00003200
+        assert mem.read(0x0303, 1, rotated=True) == 0x00000010
+
+        assert mem.read(0x0300, 2, rotated=True) == 0x76540000
+        assert mem.read(0x0301, 2, rotated=True) == 0x00543200
+        assert mem.read(0x0302, 2, rotated=True) == 0x00003210
+        assert mem.read(0x0303, 2, rotated=True) == 0x76000010
+
+        assert mem.read(0x0300, 3, rotated=True) == 0x76543200
+        assert mem.read(0x0301, 3, rotated=True) == 0x00543210
+        assert mem.read(0x0302, 3, rotated=True) == 0x76003210
+        assert mem.read(0x0303, 3, rotated=True) == 0x76540010
+
+        mem.write(0x0401, 0x76543210, strobe=0b0100, rotated=True)
+        assert mem.read(0x0400, 4) == 0x00540000
+        mem.write(0x0402, 0xdeadbeef, strobe=0b1011, rotated=True)
+        assert mem.read(0x0400, 4) == 0xde54beef
+
+        self.info("Test 4 passed: Big-endian rotation successful.")
 
     def test_import_export(self, fmt="vhex"):
         self.info(f"Testing memory import/export with format {fmt}...")

@@ -5,7 +5,7 @@
  - [#40](https://github.com/projectapheleia/avl/issues/40) Redundent call to _cast_ in Var
  - [#39](https://github.com/projectapheleia/avl/issues/39) Incovenient Behavior from Logic Assigning from Certain Types
  - [#41](https://github.com/projectapheleia/avl/issues/41) Issue with factory.set_variable
-
+ - [#52](https://github.com/projectapheleia/avl/issues/52) Memory: Support rotated and non-rotated reads and writes for unaligned access
 
 ## [v0.3.3] - 2025-10-11
 
