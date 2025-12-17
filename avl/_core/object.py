@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 import os
 import random
+import warnings
 from collections import OrderedDict
 from typing import TYPE_CHECKING, Any
 
@@ -475,8 +476,18 @@ class Object:
         """
         # Add the constraint
         if target is None:
+            if name in self._constraints_[hard]:
+                warnings.warn(f"Overriding existing constraint : {name}",
+                              UserWarning,
+                              stacklevel=2)
+
             self._constraints_[hard][name] = (constraint, [*args])
         else:
+            if name in target[hard]:
+                warnings.warn(f"Overriding existing constraint : {name}",
+                              UserWarning,
+                              stacklevel=2)
+
             target[hard][name] = (constraint, [*args])
 
     def remove_constraint(self, name: str) -> None:

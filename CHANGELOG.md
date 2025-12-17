@@ -1,12 +1,12 @@
 # Changelog
 
 ### Fixed
+ - [#51](https://github.com/projectapheleia/avl/issues/51) Suggested Change: error on same constraint name
  - [#50](https://github.com/projectapheleia/avl/issues/50) Like avl.Logic, avl.Enum assignment values should be typecasted to int
  - [#46](https://github.com/projectapheleia/avl/issues/46) Randomization fails for bitmask constraints
  - [#40](https://github.com/projectapheleia/avl/issues/40) Redundent call to _cast_ in Var
  - [#39](https://github.com/projectapheleia/avl/issues/39) Incovenient Behavior from Logic Assigning from Certain Types
  - [#41](https://github.com/projectapheleia/avl/issues/41) Issue with factory.set_variable
-
 
 ## [v0.3.3] - 2025-10-11
 
