@@ -252,7 +252,7 @@ class Memory:
         self._check_address_(address + num_bytes - 1)
 
         # Mask data
-        value &= (1 << self.width) - 1
+        value &= (1 << min(self.width, num_bytes*8)) - 1
 
         # Convert data to bytes, do endianness conversion and pad to memory width
         data = list(value.to_bytes(num_bytes, self.endianness))
