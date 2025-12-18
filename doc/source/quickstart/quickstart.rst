@@ -42,7 +42,7 @@ If you want to install a specific version, you can specify the version number:
 
 .. code-block:: bash
 
-    pip install avl-core==0.3.3
+    pip install avl-core==0.4.0
 
 Installing From Source
 ----------------------

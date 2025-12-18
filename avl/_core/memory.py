@@ -213,10 +213,10 @@ class Memory:
         Non-rotated data will write num_bytes from bit0 to the memory
         Rotated data will write from the offset within the memory line.i.e.
         a LE 4B write of 0x03020100 to address 0x1 on a 4B memory writes:
-            - mem[1] = 0x01
-            - mem[2] = 0x02
-            - mem[3] = 0x03
-            - mem[4] = 0x00
+        mem[1] = 0x01
+        mem[2] = 0x02
+        mem[3] = 0x03
+        mem[4] = 0x00
 
         :param address: Address to write to.
         :type address: int
