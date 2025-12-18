@@ -14,6 +14,9 @@ of the class::type_id::create() syntax as the factory is native to the :doc:`avl
 
 All classes that exend the :doc:`avl.Object </modules/avl._core.object>` class can be overridden by the factory. \
 
+Debugging the factory can be done by printing via either the :doc:`Factory.print_factory </modules/avl._core.factory>` method, or \
+simply casting the Factory() to a string.
+
 Override by Type
 ----------------
 .. literalinclude:: ../../../examples/factory/override_component_by_type/cocotb/example.py
@@ -45,10 +48,10 @@ factory at a path. Wildcards are allowed in the path. When the :doc:`Factory.get
 method is called, it will attempt to match the provided path to the existing paths in the factory. \
 If a match is found, it will return the associated value. If multiple matches are found, the Factory will use the \
 :doc:`Factory.specificity </modules/avl._core.factory>` method on the matching paths to determine which path \
-is the most specific, then it will return the value associated with that path. \  
+is the most specific, then it will return the value associated with that path. \
 Otherwise, it will return a default value. If no default value is provided, it will raise a `KeyError <https://docs.python.org/3/library/exceptions.html>`_.
 
-The Factory can be useful for sharing :doc:`avl.Var </modules/avl._core.var>` objects, cocotb hdl handles, 
+The Factory can be useful for sharing :doc:`avl.Var </modules/avl._core.var>` objects, cocotb hdl handles,
 and configurations for components.
 
 .. literalinclude:: ../../../examples/factory/variables/cocotb/example.py

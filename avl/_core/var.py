@@ -305,8 +305,18 @@ class Var:
             raise ValueError("Cannot add constraints to non-random variables")
 
         if target is None:
+            if name in self._constraints_[hard]:
+                warnings.warn(f"Overriding existing constraint : {name}",
+                              UserWarning,
+                              stacklevel=2)
+
             self._constraints_[hard][name] = constraint
         else:
+            if name in target:
+                warnings.warn(f"Overriding existing constraint : {name}",
+                              UserWarning,
+                              stacklevel=2)
+
             target[name] = constraint
 
     def remove_constraint(self, name: str) -> None:
@@ -394,30 +404,28 @@ class Var:
         # User defined pre-randomization function
         self.pre_randomize()
 
-        # Constraints
-        constraints = self._constraints_.copy()
-
-        if hard is not None:
-            idx = 0
-            for c in hard:
-                self.add_constraint(f"_c_hard_{idx}", c, hard=True, target=constraints[True])
-                idx += 1
-        if soft is not None:
-            idx = 0
-            for c in soft:
-                self.add_constraint(f"_c_soft_{idx}", c, hard=False, target=constraints[False])
-                idx += 1
-
-        # Calculate the range of the random variable
-        max_solver = new_solver()
-        obj_max = max_solver.maximize(self._rand_)
-        min_solver = new_solver()
-        obj_min = min_solver.minimize(self._rand_)
-        _range_ = [cast(min_solver, obj_min), cast(max_solver, obj_max)]
-
         # Create a new solver
         solver = new_solver()
 
+        if hard is not None:
+            for c in hard:
+                solver.add(c(self._rand_))
+        if soft is not None:
+            for c in soft:
+                solver.add_soft(c(self._rand_), weight=1000)
+
+        # Calculate the range of the random variable
+        _range_ = []
+        solver.push()
+        obj_max = solver.maximize(self._rand_)
+        _range_.append(cast(solver, obj_max))
+        solver.pop()
+        solver.push()
+        obj_min = solver.minimize(self._rand_)
+        _range_.append(cast(solver, obj_min))
+        solver.pop()
+
+        solver.push()
         # Add in randomization
         v = self._random_value_(bounds=(min(_range_), max(_range_)))
         solver.add_soft(self._rand_ >= v, weight=100)
@@ -428,6 +436,8 @@ class Var:
 
         # Assign value
         self.value = cast(solver, self._rand_)
+
+        solver.pop()
 
         # User defined post-randomization function
         self.post_randomize()

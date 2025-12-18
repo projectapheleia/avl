@@ -5,7 +5,7 @@
 
 import random
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Hashable
 from typing import Any
 
 from z3 import Int, Or
@@ -92,6 +92,10 @@ class Enum(Var):
         :rtype: Any
         """
         v = other.value if isinstance(other, type(self)) else other
+
+        if not isinstance(v, Hashable):
+            v = int(v)
+
         if v in self.values.keys():
             return self.values[v]
         elif v in self.values.values():

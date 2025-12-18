@@ -4,6 +4,7 @@
 # Apheleia Verification Library Factory
 import fnmatch
 import re
+import tabulate
 from typing import Any
 
 
@@ -12,6 +13,44 @@ class Factory:
     _by_instance = {}
     _variables = {}
     _sentinal = object()
+    _fmt = "grid"
+
+    def __str__(self) -> str:
+        """
+        Return a string representation of the Factory.
+
+        :return: String representation of the Factory.
+        :rtype: str
+        """
+
+        s = "\n========== FACTORY TOPOLOGY ==========\n"
+
+        if Factory._by_type:
+            s += "\nType Overrides:\n"
+            rows = [(k, getattr(v, "__name__", v)) for k, v in Factory._by_type.items()]
+            s += tabulate.tabulate(rows, headers=["Original", "Override"], tablefmt=Factory._fmt)
+
+        if Factory._by_instance:
+            s += "\nInstance Overrides:\n"
+            rows = [(k, getattr(v, "__name__", v)) for k, v in Factory._by_instance.items()]
+            s += tabulate.tabulate(rows, headers=["Original", "Override"], tablefmt=Factory._fmt)
+
+        if Factory._variables:
+            s += "\nVariables:\n"
+            s += tabulate.tabulate(Factory._variables.items(), headers=["Original", "Override"], tablefmt=Factory._fmt)
+
+        s += "\n======================================\n"
+        return s
+
+    @staticmethod
+    def print_factory() -> None:
+        """
+        Print the current factory topology including:
+            - Type overrides
+            - Instance overrides
+            - Config variables
+        """
+        print(Factory())
 
     @staticmethod
     def specificity(pattern : str) -> int:
@@ -142,7 +181,7 @@ class Factory:
         """
         Get the value of a variable by its path if it exists, otherwise return the default value.
 
-        :param defautl: The default value to return if no match is found.
+        :param default: The default value to return if no match is found.
         :type default: Any
         :param path: The path to the variable.
         :type path: str
