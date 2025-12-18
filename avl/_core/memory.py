@@ -5,6 +5,7 @@
 
 import bincopy
 import pandas as pd
+import warnings
 
 
 class Memory:
@@ -169,8 +170,9 @@ class Memory:
 
         Rotate setting determines if the data should be rotated within the memory line
         Non-rotated data will be returns num_bytes from bit0 of the return data
-        Rotated data will be returned from the offset within the memory line. If num_bytes
-        requested from the offset surpasses the memory line it's wrapped back to bit0
+        Rotated data will be returned from the offset within the memory line. i.e.
+        a LE 4B read from address 0x1 on a 4B memory where each byte contains its address
+        reads 0x03020104
 
         :param address: Address to read from.
         :type address: int
@@ -184,22 +186,20 @@ class Memory:
 
         # Offset in line and aligned address
         offset = self._get_offset_(address)
-        aligned_address = self._align_address_(address)
 
         if num_bytes is None:
             num_bytes = self.nbytes
 
         self._check_address_(address)
-        if not rotated:
-            self._check_address_(address + num_bytes - 1)
+        self._check_address_(address + num_bytes - 1)
 
         data = [0] * self.nbytes
         for i in range(num_bytes):
             if rotated:
                 idx = (offset + i) % self.nbytes
-                data[idx] = self._get_byte_(aligned_address + idx)
             else:
-                data[i] = self._get_byte_(aligned_address + offset + i)
+                idx = i
+            data[idx] = self._get_byte_(address + i)
 
         return int.from_bytes(data, self.endianness)
 
@@ -211,8 +211,12 @@ class Memory:
 
         Rotated setting determines if the data is rotated within the memory line
         Non-rotated data will write num_bytes from bit0 to the memory
-        Rotated data will write from the offset within the memory line. If num_bytes
-        requested from the offset surpasses the memory line it's wrapped back to bit0
+        Rotated data will write from the offset within the memory line.i.e.
+        a LE 4B write of 0x03020100 to address 0x1 on a 4B memory writes:
+            - mem[1] = 0x01
+            - mem[2] = 0x02
+            - mem[3] = 0x03
+            - mem[4] = 0x00
 
         :param address: Address to write to.
         :type address: int
@@ -232,7 +236,11 @@ class Memory:
 
         # Check params
         if (num_bytes is not None) and (strobe is not None):
-            raise ValueError("num_bytes and strobe cannot both be provided")
+            if num_bytes != self.nbytes:
+                warnings.warn(f"num_bytes != memory width for write with strobe - overriding to memory width",
+                              UserWarning,
+                              stacklevel=2)
+                num_bytes = self.nbytes
 
         if num_bytes is None:
             num_bytes = self.nbytes
@@ -242,8 +250,7 @@ class Memory:
 
         # Check address range
         self._check_address_(address)
-        if not rotated:
-            self._check_address_(address + num_bytes - 1)
+        self._check_address_(address + num_bytes - 1)
 
         # Mask data
         value &= (1 << self.width) - 1
@@ -262,13 +269,8 @@ class Memory:
 
         for i in range(num_bytes):
             idx = (offset + i)%self.nbytes
-            if rotated:
-                addr = aligned_address + idx
-            else:
-                addr = address + i
-
             if byte_en[idx]:
-                self.memory[addr] = data[idx]
+                self.memory[address + i] = data[idx]
 
     def export_to_file(self, filename: str, fmt : str = None) -> None:
         """
