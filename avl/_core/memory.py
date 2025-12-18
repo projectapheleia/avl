@@ -5,6 +5,7 @@
 
 import bincopy
 import pandas as pd
+import warnings
 
 
 class Memory:
@@ -21,6 +22,7 @@ class Memory:
             raise ValueError("Width must be a positive integer and a multiple of 8.")
 
         self.width = width
+        self.nbytes = width // 8
         self.ranges = []
         self.memory = {}
         self.endianness = 'little'
@@ -35,7 +37,7 @@ class Memory:
         :return: Aligned address.
         :rtype: int
         """
-        return address & ~(self.width // 8 - 1)
+        return address & ~(self.nbytes - 1)
 
     def _check_address_(self, address: int) -> None:
         """
@@ -65,6 +67,48 @@ class Memory:
         if address not in self.memory:
             self.memory[address] = self.init_fn(address)
         return self.memory[address]
+
+    def _get_offset_(self, address: int) -> int:
+        """
+        Get offset of address relative to memory width
+
+        :param address: Address to get offset from.
+        :type address: int
+        :return: Offset.
+        :rtype: int
+        """
+        return address & (self.nbytes - 1)
+
+    def _gen_strobe_(self, offset: int, nbytes: int) -> int:
+        """
+        Generate the byte enables for nbytes at a given offset
+
+        :param offset: Offset in bytes
+        :type offset: int
+        :param nbytes: Number of bytes
+        :type nbytes: int
+        :return: Strobe
+        :rtype: int
+        """
+        if nbytes == 0:
+            return 0
+
+        # base mask
+        mask = (1 << nbytes) - 1
+
+        # normalize offset to be within bounds
+        offset %= self.nbytes
+
+        # adjust for endianness
+        if self.endianness == "big":
+            # For big endian, reverse the offset direction
+            # Python's modulo already handles negatives correctly, but we'll be explicit
+            offset = ((self.nbytes - offset - nbytes) % self.nbytes + self.nbytes) % self.nbytes
+
+        # rotate mask within self.nbytes (to handle wrapping)
+        mask = ((mask << offset) | (mask >> (self.nbytes - offset))) & ((1 << self.nbytes) - 1)
+
+        return mask
 
     def set_init_fn(self, fn : callable) -> None:
         """
@@ -118,34 +162,61 @@ class Memory:
         """
         raise KeyError(f"Miss at {address}")
 
-    def read(self, address: int, num_bytes : int = None) -> int:
+    def read(self, address: int, num_bytes : int = None, rotated : bool = False) -> int:
         """
         Read a value from the memory at the specified address.
 
         Calls miss() if the address is not found in memory.
 
+        Rotate setting determines if the data should be rotated within the memory line
+        Non-rotated data will be returns num_bytes from bit0 of the return data
+        Rotated data will be returned from the offset within the memory line. i.e.
+        a LE 4B read from address 0x1 on a 4B memory where each byte contains its address
+        reads 0x03020104
+
         :param address: Address to read from.
         :type address: int
+        :param num_bytes: Number of bytes to read
+        :type num_bytes: int
+        :param rotated: Rotate data based on offset
+        :type rotated: bool
         :return: Value at the specified address.
         :rtype: int
         """
+
+        # Offset in line and aligned address
+        offset = self._get_offset_(address)
+
         if num_bytes is None:
-            num_bytes = self.width // 8
+            num_bytes = self.nbytes
 
         self._check_address_(address)
         self._check_address_(address + num_bytes - 1)
 
-        data = bytearray()
+        data = [0] * self.nbytes
         for i in range(num_bytes):
-            data.append(self._get_byte_(address + i))
+            if rotated:
+                idx = (offset + i) % self.nbytes
+            else:
+                idx = i
+            data[idx] = self._get_byte_(address + i)
 
         return int.from_bytes(data, self.endianness)
 
-    def write(self, address: int, value: int, num_bytes : int = None, strobe : int = None) -> None:
+    def write(self, address: int, value: int, num_bytes : int = None, strobe : int = None, rotated : bool = False) -> None:
         """
         Write a value to the memory at the specified address.
 
         Calls miss() if the address is not found in memory.
+
+        Rotated setting determines if the data is rotated within the memory line
+        Non-rotated data will write num_bytes from bit0 to the memory
+        Rotated data will write from the offset within the memory line.i.e.
+        a LE 4B write of 0x03020100 to address 0x1 on a 4B memory writes:
+            - mem[1] = 0x01
+            - mem[2] = 0x02
+            - mem[3] = 0x03
+            - mem[4] = 0x00
 
         :param address: Address to write to.
         :type address: int
@@ -155,21 +226,50 @@ class Memory:
         :type num_bytes: int, optional
         :param strobe: Strobe signal
         :type strobe: int, optional
+        :param rotated: Rotate data and strobe based on offset
+        :type rotated: bool
         """
+
+        # Offset in line
+        offset = self._get_offset_(address)
+
+        # Check params
+        if (num_bytes is not None) and (strobe is not None):
+            if num_bytes != self.nbytes:
+                warnings.warn(f"num_bytes != memory width for write with strobe - overriding to memory width",
+                              UserWarning,
+                              stacklevel=2)
+                num_bytes = self.nbytes
+
         if num_bytes is None:
-            num_bytes = self.width // 8
+            num_bytes = self.nbytes
 
         if strobe is None:
-            strobe = (1 << num_bytes) - 1
+            strobe = self._gen_strobe_(offset, num_bytes)
 
+        # Check address range
         self._check_address_(address)
         self._check_address_(address + num_bytes - 1)
 
-        data = value.to_bytes(num_bytes, self.endianness)
+        # Mask data
+        value &= (1 << min(self.width, num_bytes*8)) - 1
+
+        # Convert data to bytes, do endianness conversion and pad to memory width
+        data = list(value.to_bytes(num_bytes, self.endianness))
+        data.extend([0] * max(0, self.nbytes - len(data)))
+
+        if not rotated:
+            data = data[-offset:] + data[:-offset]
+
+        # Convert strobe to little endian list of bits
+        byte_en = [(strobe >> i) & 0x1 for i in range(self.nbytes)]
+        if self.endianness != "little":
+            byte_en.reverse()
+
         for i in range(num_bytes):
-            offset = i if self.endianness == 'little' else num_bytes - 1 - i
-            if strobe & (1 << offset):
-                self.memory[address + i] = data[i]
+            idx = (offset + i)%self.nbytes
+            if byte_en[idx]:
+                self.memory[address + i] = data[idx]
 
     def export_to_file(self, filename: str, fmt : str = None) -> None:
         """
@@ -189,7 +289,7 @@ class Memory:
             Pad the whole memory width
             """
             exists = False
-            for i in range(address, address + self.width // 8):
+            for i in range(address, address + self.nbytes):
                 if i in self.memory:
                     exists = True
                     break
@@ -205,16 +305,16 @@ class Memory:
             with open(filename, 'w') as f:
                 for r in self.ranges:
                     new_address = True
-                    for a in range(r[0], r[1], self.width // 8):
+                    for a in range(r[0], r[1], self.nbytes):
                         if exists(a):
                             if new_address:
                                 f.write(f"@{a:04x}\n")
                                 new_address = False
 
                             if fmt == "vhex":
-                                f.write(f"{self.read(a, self.width // 8):0{self.width // 4}x}\n")
+                                f.write(f"{self.read(a, self.nbytes):0{self.width // 4}x}\n")
                             elif fmt == "vbin":
-                                f.write(f"{self.read(a, self.width // 8):0{self.width}b}\n")
+                                f.write(f"{self.read(a, self.nbytes):0{self.width}b}\n")
                         else:
                             new_address = True
 
@@ -314,11 +414,11 @@ class Memory:
                     if fmt == "vhex":
                         bytes = int(t, 16).to_bytes(len(t) // 2, self.endianness)
                         for i in range(len(bytes)):
-                            self.write(addr+i, bytes[i], 1)
+                            self.memory[addr+i] = bytes[i]
                     elif fmt == "vbin":
                         bytes = int(t, 2).to_bytes(len(t) // 8, self.endianness)
                         for i in range(len(bytes)):
-                            self.write(addr+i, bytes[i], 1)
+                            self.memory[addr+i] = bytes[i]
                     else:
                         raise ValueError(f"Unsupported file format: {fmt}")
                     addr += self.width // 8
