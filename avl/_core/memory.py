@@ -232,7 +232,6 @@ class Memory:
 
         # Offset in line
         offset = self._get_offset_(address)
-        aligned_address = self._align_address_(address)
 
         # Check params
         if (num_bytes is not None) and (strobe is not None):
