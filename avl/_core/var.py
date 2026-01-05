@@ -81,8 +81,8 @@ class Var:
         self._rand_ = None
         self._constraints_ = {True : {}, False: {}}
 
-        if self._auto_random_:
-            self._rand_ = self._z3_()
+        # z3 object creation removed
+        # created as part of randomization to speed up non-randomized object creation
 
     @property
     def value(self):
@@ -400,6 +400,10 @@ class Var:
             else:
                 raise Exception("Solver failed to randomize")
             return cast_value
+
+        # Create rand / z3 variable
+        if self._auto_random_ and self._rand_ is None:
+            self._rand_ = self._z3_()
 
         # User defined pre-randomization function
         self.pre_randomize()

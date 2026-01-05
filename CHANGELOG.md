@@ -1,5 +1,11 @@
 # Changelog
 
+### Fixed
+ - [#55](https://github.com/projectapheleia/avl/issues/55) Factory(): Compile regexs to improve performance on get_instance and get_variable
+ - [#56](https://github.com/projectapheleia/avl/issues/56) Object(): More generic MutableMapping / MutableSequence and Set handling for printing and variable location
+ - [#57](https://github.com/projectapheleia/avl/issues/57) Var(): Move z3 creation to randomize stage to improve performance of object creation when randomization is not needed
+ - [#58](https://github.com/projectapheleia/avl/issues/58) Object(): Move Logging functions to class variables to improve __init__ performance
+
 ## [v0.4.0] - 2025-12-18
 
 ### Fixed

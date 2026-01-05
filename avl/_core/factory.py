@@ -5,15 +5,52 @@
 import fnmatch
 import re
 import tabulate
-from typing import Any
-
+from typing import Any, Dict, Optional, Callable
 
 class Factory:
     _by_type = {}
+
     _by_instance = {}
+    _by_instance_regex = None
+    _by_instance_overrides = []
+
     _variables = {}
+    _variables_regex = None
+    _variables_overrides = []
+
     _sentinal = object()
     _fmt = "grid"
+
+    @staticmethod
+    def _compile_regex(mapping: Dict[str, Callable]) -> tuple[Optional[re.Pattern], Dict[str, Callable]]:
+        """
+        Compile glob patterns into a single regex with named groups.
+
+        :param mapping: A dictionary mapping glob patterns to handlers.
+        :type mapping: Dict[str, Callable]
+        :return: A tuple containing the compiled regex and a mapping from group names to handlers.
+        :rtype: tuple[Optional[re.Pattern], Dict[str, Callable]]
+        """
+        if not mapping:
+            return None, {}
+
+        # Sort once by specificity (most specific first)
+        sorted_patterns = sorted(
+            mapping.keys(),
+            key=Factory.specificity,
+            reverse=True,
+        )
+
+        group_to_handler: Dict[str, Callable] = {}
+        regex_parts = []
+
+        for i, glob in enumerate(sorted_patterns):
+            group_name = f"g{i}"
+            regex = fnmatch.translate(glob)
+            regex_parts.append(f"(?P<{group_name}>{regex})")
+            group_to_handler[group_name] = mapping[glob]
+
+        return re.compile("|".join(regex_parts)), group_to_handler
 
     def __str__(self) -> str:
         """
@@ -105,6 +142,9 @@ class Factory:
         if path not in Factory._by_instance:
             Factory._by_instance[path] = override
 
+        # Compile patterns after adding a new override
+        Factory._by_instance_regex, Factory._by_instance_overrides = (Factory._compile_regex(Factory._by_instance))
+
     @staticmethod
     def get_by_type(original: type) -> type:
         """
@@ -115,10 +155,7 @@ class Factory:
         :return: The override type or the original type.
         :rtype: type
         """
-        if original.__name__ in Factory._by_type:
-            return Factory._by_type[original.__name__]
-        else:
-            return original
+        return Factory._by_type.get(original.__name__, original)
 
     @staticmethod
     def get_by_instance(original: type, path: str) -> type:
@@ -132,13 +169,14 @@ class Factory:
         :return: The override type or the original type.
         :rtype: type
         """
-        matches = [value for value in Factory._by_instance if fnmatch.fnmatch(path, value)]
-
-        if matches:
-            closest_match = max(matches, key=Factory.specificity)
-            return Factory._by_instance[closest_match]
-        else:
+        if Factory._by_instance_regex is None:
             return original
+
+        match = Factory._by_instance_regex.match(path)
+        if match and match.lastgroup:
+            return Factory._by_instance_overrides[match.lastgroup]
+
+        return original
 
     @staticmethod
     def get_factory_override(original: type, path: str) -> type:
@@ -176,6 +214,9 @@ class Factory:
         if path not in Factory._variables or allow_override:
             Factory._variables[path] = value
 
+        # Compile patterns after adding a new override
+        Factory._variables_regex, Factory._variables_overrides = (Factory._compile_regex(Factory._variables))
+
     @staticmethod
     def get_variable(path: str, default: Any=_sentinal) -> Any:
         """
@@ -189,16 +230,15 @@ class Factory:
         :return: The value of the variable or the default value.
         :rtype: Any
         """
-        matches = [value for value in Factory._variables if fnmatch.fnmatch(path, value)]
 
-        if matches:
-            closest_match = max(matches, key=Factory.specificity)
-            return Factory._variables[closest_match]
+        match = Factory._variables_regex.match(path) if Factory._variables_regex else None
+
+        if match and match.lastgroup:
+            return Factory._variables_overrides[match.lastgroup]
         elif default is not Factory._sentinal:
             return default
         else:
             raise KeyError(f"No variable in the factory matches Path argument ({path}), \
                 and no default value is provided.")
-
 
 __all__ = ["Factory"]

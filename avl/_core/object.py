@@ -9,7 +9,7 @@ import copy
 import os
 import random
 import warnings
-from collections import OrderedDict
+from collections.abc import MutableMapping, MutableSequence, Set
 from typing import TYPE_CHECKING, Any
 
 import tabulate
@@ -65,7 +65,7 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
         memo[obj_id] = new_obj
         return new_obj
 
-    elif isinstance(obj, list):
+    elif isinstance(obj, MutableSequence):
         new_list = []
         memo[obj_id] = new_list
         new_list.extend(_var_finder_(item, memo, conversion, do_copy, do_deepcopy) for item in obj)
@@ -77,12 +77,12 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
         memo[obj_id] = new_tuple
         return new_tuple
 
-    elif isinstance(obj, set):
+    elif isinstance(obj, Set):
         new_set = {_var_finder_(item, memo, conversion, do_copy, do_deepcopy) for item in obj}
         memo[obj_id] = new_set
         return new_set
 
-    elif isinstance(obj, (dict | OrderedDict)):
+    elif isinstance(obj, MutableMapping):
         new_dict = type(obj)()
         memo[obj_id] = new_dict
         for k, v in obj.items():
@@ -133,6 +133,16 @@ def _patch_constraints_(obj : Object, new_obj : Object, conversion: dict[Any, in
             new_obj._constraints_[truth_value][k] = (v[0], new_v)
 
 class Object:
+
+    # Logger - Make all logger functions available in class to simplify code
+    # Class level to improve performance (slightly)
+    debug = Log.debug
+    info = Log.info
+    warn = Log.warn
+    warning = Log.warning
+    error = Log.error
+    critical = Log.critical
+    fatal = Log.fatal
 
     def __copy__(self) -> Object:
         cls = self.__class__
@@ -185,21 +195,21 @@ class Object:
         if not args and not kwargs:
             return super().__new__(cls)
 
-        obj = super().__new__(cls)
         name = args[0]
         parent = args[1]
         path = name
 
         # No factory for hidden Objects
         if name.startswith("_"):
-            return obj
+            return super().__new__(cls)
 
         if parent is not None:
-            path = parent.get_full_name() + "." + name
+            path = f"{parent.get_full_name()}.{name}"
 
-        obj = super().__new__(Factory.get_factory_override(cls, path))
+        target_cls = Factory.get_factory_override(cls, path)
+        obj = super().__new__(target_cls)
 
-        if not issubclass(type(obj), cls):
+        if target_cls is not cls and not issubclass(target_cls, cls):
             obj.__init__(*args, **kwargs)
 
         return obj
@@ -222,20 +232,7 @@ class Object:
         # Randomness and constraints
         self._constraints_ = {True : {}, False: {}}
         self._frozen_constraints_ = False
-        self._vars_ = []
-        self._var_ids_ = []
         self._solver_ = None
-        self._max_values_ = {}
-        self._min_values_ = {}
-
-        # Logger - Make all logger functions available in class to simplify code
-        self.debug = Log.debug
-        self.info = Log.info
-        self.warn = Log.warn
-        self.warning = Log.warning
-        self.error = Log.error
-        self.critical = Log.critical
-        self.fatal = Log.fatal
 
         # Table format for string representation
         self._table_fmt_ = "grid"
@@ -256,20 +253,20 @@ class Object:
             if indent == 0 and isinstance(val, list) and len(val) == 1 and isinstance(val[0], dict):
                 val = val[0]
 
-            if isinstance(val, dict):
+            if isinstance(val, MutableMapping):
                 lines = []
                 for k, v in val.items():
-                    if isinstance(v, dict | list):
+                    if isinstance(v, MutableMapping | MutableSequence):
                         lines.append(f"{prefix}{k}:")
                         lines.append(format_value(v, indent + 1, fmt))
                     else:
                         lines.append(f"{prefix}{k}: {fmt(v)}")
                 return '\n'.join(lines)
 
-            elif isinstance(val, list):
+            elif isinstance(val, MutableSequence | Set | tuple):
                 lines = []
                 for item in val:
-                    if isinstance(item, dict | list):
+                    if isinstance(item, MutableMapping | MutableSequence | Set | tuple):
                         lines.append(f"{prefix}-")
                         lines.append(format_value(item, indent + 1, fmt))
                     else:
@@ -299,11 +296,11 @@ class Object:
                   values.append([k,v])
                 else:
                   values.append([k, f"type({v.__class__.__name__}) at {hex(id(v))}"])
-            elif isinstance(v, (set | list | tuple)):
+            elif isinstance(v, (Set | MutableSequence | tuple)):
                 values.append([f"{k}", format_value(v, fmt=_fmt_)])
-            elif isinstance(v, (dict | OrderedDict)):
+            elif isinstance(v, MutableMapping):
                 values.append([f"{k}", format_value(v, fmt=_fmt_)])
-            elif isinstance(v, (Var | bool | bytes | int | float | complex | str)):
+            else:
                 values.append([k, _fmt_(v)])
 
         if self._table_transpose_:
@@ -631,6 +628,12 @@ class Object:
             for v in conversion.values():
                 if Var._lookup_[v._idx_]._auto_random_:
                     vars.append(Var._lookup_[v._idx_])
+
+                    # Create the random / z3 variable
+                    # Done only when randomization is called to speed up non-randomized object creation
+                    if v._rand_ is None:
+                        v._rand_ = v._z3_()
+
             var_ids = [v._idx_ for v in vars]
 
             # Create Solver

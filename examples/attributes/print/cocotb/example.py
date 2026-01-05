@@ -6,6 +6,7 @@
 
 import avl
 import cocotb
+from collections import OrderedDict, defaultdict
 
 
 class example_env(avl.Env):
@@ -17,12 +18,18 @@ class example_env(avl.Env):
         self.hex_var = 100
         self.custom_var = 100
         self.hex_list = [100, 200, 300]
+        self.dec_set = {100, 200, 300}
         self.hex_dict = {"A": 100, "B": 200, "C": 300}
         self.list_list = [[0,1], [2,3], [4,5]]
         self.simple_dict = {"A": 1, "B": 2, "C": 3}
         self.list_dict = {"X" : ["a", "b"], "Y" : [0]}
         self.mixed = [{"dict" : ["value1", "value2"]}, ["list0", "list1", avl.Uint32(100, fmt=bin)]]
         self.obj = avl.Object("obj", self)
+        self.tuple_var = (1, 2, 3)
+        self.dict_tuple = {"T1" : (10, 20), "T2" : (30, 40)}
+        self.dict_set = {"S1" : {1,2,3}, "S2" : {4,5,6}}
+        self.odict = OrderedDict({"one": 1, "two": 2, "three": 3})
+        self.ddict = defaultdict(list, {"first": [1,2], "second": [3,4]})
 
         self.set_field_attributes("hex_var", fmt=hex)
         self.set_field_attributes("hex_list", fmt=hex)
