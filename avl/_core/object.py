@@ -134,16 +134,6 @@ def _patch_constraints_(obj : Object, new_obj : Object, conversion: dict[Any, in
 
 class Object:
 
-    # Logger - Make all logger functions available in class to simplify code
-    # Class level to improve performance (slightly)
-    debug = Log.debug
-    info = Log.info
-    warn = Log.warn
-    warning = Log.warning
-    error = Log.error
-    critical = Log.critical
-    fatal = Log.fatal
-
     def __copy__(self) -> Object:
         cls = self.__class__
         new_obj = cls.__new__(cls)
@@ -405,6 +395,99 @@ class Object:
             self._table_transpose_ = transpose
         if recurse is not None:
             self._table_recurse_ = recurse
+
+    def debug(self, msg: str, group: str = None) -> None:
+        """
+        Logs a debug message.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.debug(msg, group)
+
+    def info(self, msg: str, group: str = None) -> None:
+        """
+        Logs an info message.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.info(msg, group)
+
+    def warn(self, msg: str, group: str = None) -> None:
+        """
+        Logs a warning message.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.warn(msg, group)
+
+    def warning(self, msg: str, group: str = None) -> None:
+        """
+        Logs a warning message.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.warning(msg, group)
+
+    def error(self, msg: str, group: str = None) -> None:
+        """
+        Logs an error message.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.error(msg, group)
+
+    def critical(self, msg: str, group: str = None) -> None:
+        """
+        Logs a critical message.
+        Instantly stops the simulation by raising a SimFailure exception.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.critical(msg, group)
+
+    def fatal(self, msg: str, group: str = None) -> None:
+        """
+        Logs a fatal message and raises a SimFailure exception.
+        Instantly stops the simulation by raising a SimFailure exception.
+
+        :param msg: Message to be logged.
+        :type msg: str
+        :param group: Group to which the message belongs.
+        :type group: str
+        """
+        if group is None:
+            group = self.get_full_name()
+        Log.fatal(msg, group)
 
     def compare(self, rhs: Object, verbose: bool = False, bidirectional: bool = True) -> bool:
         """
