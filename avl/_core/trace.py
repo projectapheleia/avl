@@ -3,6 +3,8 @@
 # Description:
 # Apheleia Verification Library Trace
 
+from collections.abc import MutableMapping, MutableSequence
+
 import os
 
 import cocotb
@@ -100,7 +102,13 @@ class Trace(Component):
             row = {}
             for col in self.df.columns:
                 if hasattr(item, col):
-                    row[col] = getattr(item, col)
+                    v = getattr(item, col)
+                    if isinstance(v, (MutableSequence | tuple)):
+                        row[col] = "[ " + ", ".join(v) + " ]"
+                    elif isinstance(v, (MutableMapping)):
+                        row[col] = "{ " + ", ".join(f"{_k} : {_v}" for _k, _v in v.items()) + " }"
+                    else:
+                        row[col] = str(v)
                 else:
                     row[col] = None
 

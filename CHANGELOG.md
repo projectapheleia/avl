@@ -6,6 +6,7 @@
  - [#57](https://github.com/projectapheleia/avl/issues/57) Var(): Move z3 creation to randomize stage to improve performance of object creation when randomization is not needed
  - [#58](https://github.com/projectapheleia/avl/issues/58) Object(): Move Logging functions to class variables to improve __init__ performance
  - [#54](https://github.com/projectapheleia/avl/issues/54) Group parameter in bound Log functions
+ - [#59](https://github.com/projectapheleia/avl/issues/59) Trace(): Poor formatting of defaultdict / orderedDict i.e. non-native types
 
 ## [v0.4.0] - 2025-12-18
 
