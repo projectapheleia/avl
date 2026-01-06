@@ -42,7 +42,7 @@ PhaseManager.add_phase("RUN", None, top_down=False)
 PhaseManager.add_phase("REPORT", PhaseManager.get_phase("RUN"), top_down=False)
 
 # Add version
-__version__: str = "0.4.0"
+__version__: str = "0.4.1"
 
 __all__ = [
     "__version__",

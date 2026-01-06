@@ -114,7 +114,13 @@ Automatically fix common issues:
 ruff check . --fix
 ```
 
+## Additional Libraries / UVCs
 
+| Library | Description |
+|---------|-------------|
+|[avl-apb](https://github.com/projectapheleia/avl-apb)| AMBA APB UVC |
+|[avl-axi-stream](https://github.com/projectapheleia/avl-axi-stream)| AMBA AXI-STREAM UVC |
+|[avl-axi](https://github.com/projectapheleia/avl-axi)| AMBA AXI5 UVC |
 
 ## 📧 Contact
 

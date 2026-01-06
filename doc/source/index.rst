@@ -30,6 +30,12 @@ Apheleia Verification Library Documentation
    visualization/visualization
    modules/all_modules
 
+Additional Libraries / UVCs
+===========================
+
+* `avl-apb <https://avl-apb.readthedocs.io/en/latest/>`_ - AMBA APB UVC for Apheleia Verification Library
+* `avl-axi-stream <https://avl-axi-stream.readthedocs.io/en/latest/>`_ - AMBA AXI-STREAM UVC for Apheleia Verification Library
+* `avl-axi <https://avl-axi.readthedocs.io/en/latest/>`_ - AMBA AXI5 UVC for Apheleia Verification Library
 
 Indices and tables
 ==================

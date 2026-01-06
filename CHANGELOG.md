@@ -1,5 +1,7 @@
 # Changelog
 
+## [v0.4.1] - 2026-01-06
+
 ### Fixed
  - [#55](https://github.com/projectapheleia/avl/issues/55) Factory(): Compile regexs to improve performance on get_instance and get_variable
  - [#56](https://github.com/projectapheleia/avl/issues/56) Object(): More generic MutableMapping / MutableSequence and Set handling for printing and variable location
