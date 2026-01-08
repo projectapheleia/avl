@@ -66,9 +66,8 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
         return new_obj
 
     elif isinstance(obj, MutableSequence):
-        new_list = []
+        new_list = [_var_finder_(item, memo, conversion, do_copy, do_deepcopy) for item in obj]
         memo[obj_id] = new_list
-        new_list.extend(_var_finder_(item, memo, conversion, do_copy, do_deepcopy) for item in obj)
         return new_list
 
     elif isinstance(obj, tuple):
@@ -100,10 +99,20 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
             setattr(new_struct, name, new_v)
         return new_struct
 
+    elif isinstance(obj, Object):
+        memo[obj_id] = obj
+        return obj
+
     else:
         if do_deepcopy:
             try:
-                copied = copy.deepcopy(obj, memo)
+                try:
+                    copied = copy.deepcopy(obj, memo)
+                except:
+                    warnings.warn(f"Attempt to deepcopy unsupported object (returning original) : {obj}",
+                                  UserWarning,
+                                  stacklevel=2)
+                    copied = obj
                 memo[obj_id] = copied
                 return copied
             except RecursionError:

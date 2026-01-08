@@ -65,8 +65,8 @@ class example_env(avl.Env):
         z = copy.deepcopy(x)
         assert(x.v is not y.v)
 
-        # Show s is not a reference
-        assert(x.s is not z.s)
+        # Show s is a reference
+        assert(x.s is z.s)
 
         # Show avl_vars aren't related after copy
         z.i = 2
