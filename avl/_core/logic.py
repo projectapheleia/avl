@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVec
+from z3 import ArgumentError, BitVec
 
 from .var import Var
 
@@ -94,5 +94,36 @@ class Logic(Var):
         :rtype: z3.BitVecRef
         """
         return BitVec(f"{self._idx_}", self.width)
+
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [upper_bound:lower_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+            mask = (1 << (key.stop - key.start))-1
+            return (self.value >> key.start) & mask
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+            return (self.value >> key) & 0x1
+        else:
+            raise ArgumentError(f"Unsupported slice type: {type(key)}")
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [upper_bound:lower_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+
+            mask = (1 << (key.stop - key.start))-1
+            self.value = (self.value & ~(mask << key.start) | ((value & mask) << key.start))
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+            self.value = (self.value & ~(1 << key)) | ((value & 0x1) << key)
+        else:
+            raise ArgumentError(f"Unsupported slice type: {type(key)}")
+
+
 
 __all__ = ["Logic"]
