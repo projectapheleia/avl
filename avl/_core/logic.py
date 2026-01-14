@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from z3 import ArgumentError, BitVec
+from z3 import BitVec
 
 from .var import Var
 
