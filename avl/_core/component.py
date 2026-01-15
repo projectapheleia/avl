@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 import cocotb
+import cocotb.triggers
 from cocotb.triggers import NullTrigger
 
 from .object import Object
@@ -18,7 +19,7 @@ from .visualization import Visualization
 
 class Component(Object):
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, _):
         """
         Deep copy the Component - to avoid recursion just return the instance.
 
@@ -62,6 +63,7 @@ class Component(Object):
         :param kwargs: Arbitrary keyword arguments.
         """
         phase = PhaseManager._current
+        assert phase is not None
         if phase.top_down:
             fn = getattr(self, fn_name, None)
             if fn is not None:
@@ -90,7 +92,7 @@ class Component(Object):
         if child not in self._children_:
             self._children_.append(child)
 
-    def get_child(self, name: str) -> Component:
+    def get_child(self, name: str) -> Component|None:
         """
         Get a child component by name.
 
@@ -132,7 +134,7 @@ class Component(Object):
             await PhaseManager._current.wait_for_objections()
             PhaseManager.next()
 
-    def raise_objection(self, phase: Phase = None, obj: Object = None) -> None:
+    def raise_objection(self, phase: Phase|None = None, obj: Object|None = None) -> None:
         """
         Raise an objection for the current phase.
 
@@ -147,9 +149,10 @@ class Component(Object):
         if obj is None:
             obj = self
 
+        assert phase is not None
         phase.raise_objection(obj)
 
-    def drop_objection(self, phase: Phase = None, obj: Object = None) -> None:
+    def drop_objection(self, phase: Phase|None = None, obj: Object|None = None) -> None:
         """
         Drop an objection for the current phase.
 
@@ -164,6 +167,7 @@ class Component(Object):
         if obj is None:
             obj = self
 
+        assert phase is not None
         phase.drop_objection(obj)
 
 
