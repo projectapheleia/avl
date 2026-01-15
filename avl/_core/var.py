@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, ArithRef, sat
+from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, ArithRef, BitVecRef, sat
 
 
 class Var:
@@ -135,7 +135,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef | ArithRef:
+    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef | ArithRef | BitVecRef:
         """
         Return the Z3 representation of the variable.
 

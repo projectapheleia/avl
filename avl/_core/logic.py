@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVec
+from z3 import BitVec, BitVecRef
 
 from .var import Var
 
@@ -86,7 +86,7 @@ class Logic(Var):
         """
         return (0, (1 << self.width) - 1)
 
-    def _z3_(self) -> BitVec:
+    def _z3_(self) -> BitVecRef:
         """
         Get the Z3 representation of the variable.
 
