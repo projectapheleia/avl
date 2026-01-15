@@ -1,5 +1,8 @@
 # Changelog
 
+### Added
+ - [#62](https://github.com/projectapheleia/avl/pull/62) Add slice support for vars
+
 ### Fixed
  - [#60](https://github.com/projectapheleia/avl/issues/60) Object(): deepcopy deepcopies all Objects() (including _parent_). Should just copy (reference)
  - [#61](https://github.com/projectapheleia/avl/issues/61) Object(): deepcopy attempts to deepcopy hdl handles. These don't pickle so fail
