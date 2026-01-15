@@ -15,11 +15,11 @@ class Factory:
 
     _by_instance = {}
     _by_instance_regex = None
-    _by_instance_overrides = []
+    _by_instance_overrides: dict[str, Any] = {}
 
     _variables = {}
     _variables_regex = None
-    _variables_overrides = []
+    _variables_overrides: dict[str, Any] = {}
 
     _sentinal = object()
     _fmt = "grid"
@@ -93,7 +93,7 @@ class Factory:
         print(Factory())
 
     @staticmethod
-    def specificity(pattern : str) -> int:
+    def specificity(pattern : str) -> tuple[float, int]:
         """
         Calculate specificity score for a pattern (higher = more specific)
         This function evaluates the pattern based on the number of literal characters,
@@ -103,7 +103,7 @@ class Factory:
         :param pattern: The pattern to evaluate.
         :type pattern: str
         :return: Specificity score.
-        :rtype: int
+        :rtype: tuple[float, int]
         """
         # Count literal characters (non-wildcards)
         literal_chars = len(re.sub(r'[*?[\]]', '', pattern))
@@ -176,7 +176,7 @@ class Factory:
             return original
 
         match = Factory._by_instance_regex.match(path)
-        if match and match.lastgroup:
+        if match is not None and match.lastgroup is not None:
             return Factory._by_instance_overrides[match.lastgroup]
 
         return original
@@ -236,7 +236,7 @@ class Factory:
 
         match = Factory._variables_regex.match(path) if Factory._variables_regex else None
 
-        if match and match.lastgroup:
+        if match is not None and match.lastgroup is not None:
             return Factory._variables_overrides[match.lastgroup]
         elif default is not Factory._sentinal:
             return default
