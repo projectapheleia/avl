@@ -110,7 +110,7 @@ class Logic(Var):
             mask = 0x1
             rshift_width = key
         else:
-            raise ArgumentError(f"Unsupported slice type: {type(key)}")
+            raise ValueError(f"Unsupported slice type: {type(key)}")
 
         return (self.value >> rshift_width) & mask
 
@@ -129,7 +129,7 @@ class Logic(Var):
             mask = 0x1
             lshift_width = key
         else:
-            raise ArgumentError(f"Unsupported slice type: {type(key)}")
+            raise ValueError(f"Unsupported slice type: {type(key)}")
 
         self.value = (self.value & ~(mask << lshift_width)) | ((value & mask) << lshift_width)
 
