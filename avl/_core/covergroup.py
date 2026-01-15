@@ -16,7 +16,7 @@ from .coverpoint import Coverpoint
 
 
 class Covergroup(Component):
-    def __init__(self, name: str, parent: Component = None) -> None:
+    def __init__(self, name: str, parent: Component) -> None:
         """
         Covergroup class for managing coverpoints and covercrosses.
 
@@ -141,7 +141,7 @@ class Covergroup(Component):
         :param full: If True, generate a detailed report
         :return: A pandas DataFrame with the report
         """
-        retval = None
+        retval = pd.DataFrame()
         for cp in self._cps_.values():
             if retval is None:
                 retval = cp.report(full=full)
