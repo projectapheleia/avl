@@ -9,10 +9,13 @@ import copy
 from collections.abc import Iterator
 from typing import Any
 
-from cocotb.handle import HierarchyObject
+from cocotb.handle import HierarchyObject, SimHandleBase
 
 
 class _StructMeta_(type):
+    def __init__(self):
+        self._fields_ = []
+
     def __new__(mcs, name, bases, namespace):
         """
         Custom metaclass to automatically collect field annotations
@@ -118,7 +121,7 @@ class Struct(metaclass=_StructMeta_):
                 if h is not None:
                     h.value = s.value
 
-    def from_bits(self, value : int) -> None:
+    def from_bits(self, value : SimHandleBase) -> None:
         """
         Populate the Struct instance from a bit representation.
         This method takes an integer value and assigns each field's value
@@ -129,9 +132,9 @@ class Struct(metaclass=_StructMeta_):
         :return: None
         """
         if hasattr(value, "value"):
-            _value = int(value.value)
+            _value = int(value.value) # pyright: ignore [reportAttributeAccessIssue]
         else:
-            _value = int(value)
+            _value = int(value) # pyright: ignore [reportArgumentType]
         for name, _ in reversed(self._fields_):
             v = getattr(self, name)
             v.value = _value & ((1 << v.width) - 1)
