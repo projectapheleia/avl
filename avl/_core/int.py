@@ -31,7 +31,7 @@ class Int(Uint):
         self,
         *args,
         auto_random: bool = True,
-        fmt: Callable[..., int] = str,
+        fmt: Callable[..., str] = str,
         width: int = 32
     ) -> None:
         """
@@ -59,7 +59,7 @@ class Int(Uint):
         :rtype: int
         """
         v = other.value if isinstance(other, Var) else other
-        (_min_, _max_) = self._range_()
+        (_min_, _) = self._range_()
 
         return int((v - _min_) % (1 << self.width)) + _min_
 
@@ -74,7 +74,7 @@ class Int(Uint):
 
 class Int8(Int):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -101,7 +101,7 @@ class Int8(Int):
 
 class Int16(Int):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -128,7 +128,7 @@ class Int16(Int):
 
 class Int32(Int):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -155,7 +155,7 @@ class Int32(Int):
 
 class Int64(Int):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
