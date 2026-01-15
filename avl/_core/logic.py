@@ -32,7 +32,7 @@ class Logic(Var):
         self,
         *args,
         auto_random: bool = True,
-        fmt: Callable[..., int] = hex,
+        fmt: Callable[..., str] = hex,
         width: int = 32
     ) -> None:
         """
