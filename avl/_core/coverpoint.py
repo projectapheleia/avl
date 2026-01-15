@@ -96,7 +96,7 @@ class Coverpoint(Component):
         else:
             raise ValueError(f"Bin {name} does not exist")
 
-    def get_hit(self) -> Coverbin:
+    def get_hit(self) -> Coverbin|None:
         """
         Check if the variable matches any bin condition.
 
@@ -187,7 +187,7 @@ class Coverpoint(Component):
         """
 
         if full:
-            retval = None
+            retval = pd.DataFrame()
             for b in self._bins_.values():
                 if retval is None:
                     retval = b.report()
