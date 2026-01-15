@@ -115,7 +115,7 @@ class Coverbin(Component):
                 delta2 = float(var) - self.mean
                 self._m2_ += delta * delta2
 
-    def get_mean(self) -> float:
+    def get_mean(self) -> float|None:
         """
         Return the mean value.
 
@@ -127,7 +127,7 @@ class Coverbin(Component):
         else:
             return None
 
-    def get_variance(self) -> float:
+    def get_variance(self) -> float|None:
         """
         Return the variance value.
 
@@ -139,7 +139,7 @@ class Coverbin(Component):
         else:
             return None
 
-    def get_stddev(self) -> float:
+    def get_stddev(self) -> float|None:
         """
         Return the standard deviation value.
 
@@ -147,7 +147,9 @@ class Coverbin(Component):
         :rtype: float
         """
         if self.stats:
-            return sqrt(self.get_variance()) if self._count_ > 1 else None
+            variance = self.get_variance()
+            assert variance is not None
+            return sqrt(variance) if self._count_ > 1 else None
         else:
             return None
 
