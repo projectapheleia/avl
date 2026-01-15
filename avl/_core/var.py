@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, sat
+from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, ArithRef, sat
 
 
 class Var:
@@ -20,9 +20,9 @@ class Var:
     _lookup_ = weakref.WeakValueDictionary()
 
     @staticmethod
-    def _register_(cls : Var) -> None:
-        Var._lookup_[Var._count_] = cls
-        cls._idx_ = Var._count_
+    def _register_(new_var : Var) -> None:
+        Var._lookup_[Var._count_] = new_var
+        new_var._idx_ = Var._count_
         Var._count_ += 1
 
     def __copy__(self) -> Var:
@@ -51,7 +51,7 @@ class Var:
         memo[id(self)] = new_obj
         return new_obj
 
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., int] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
 
@@ -70,6 +70,7 @@ class Var:
             self.__class__._deprecated_name_warning_ = False
 
         # Lookup
+        self._idx_ = -1
         Var._register_(self)
 
         self.name = "**deprecated**"
@@ -133,7 +134,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef:
+    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef | ArithRef:
         """
         Return the Z3 representation of the variable.
 

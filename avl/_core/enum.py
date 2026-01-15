@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-from z3 import Int, Or
+from z3 import Int, Or, ArithRef
 
 from .var import Var
 
@@ -62,6 +62,7 @@ class Enum(Var):
             )
             self.__class__._deprecated_name_warning_ = False
 
+        assert len(args) == 2 or len(args) == 3, f"Unsupported number of args: {len(args)}"
         value = args[-2]
         values = args[-1]
 
@@ -123,7 +124,7 @@ class Enum(Var):
         """
         return (min(self.values.values()), max(self.values.values()))
 
-    def _z3_(self) -> Int:
+    def _z3_(self) -> ArithRef:
         """
         Return the Z3 representation of the variable.
         :return: The Z3 representation of the variable.
@@ -150,8 +151,9 @@ class Enum(Var):
         for k, v in self.values.items():
             if v == self.value:
                 return self._fmt_(k)
+        raise ValueError("Cannot represent enum value as it is unknown")
 
-    def _random_value_(self, bounds: tuple[Any, Any] = None) -> Any:
+    def _random_value_(self, bounds: tuple[Any, Any]|None = None) -> Any:
         """
         Randomize the value of the variable.
         """
