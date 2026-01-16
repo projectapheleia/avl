@@ -7,6 +7,7 @@ import os
 from collections.abc import MutableMapping, MutableSequence
 
 import cocotb
+import cocotb.utils
 import pandas as pd
 
 from .component import Component
@@ -39,12 +40,12 @@ class Trace(Component):
 
         # User defined columns for trace data
         # If None, all public attributes of item will be used
-        self.columns = None
+        self.columns: list[str]|None = None
 
         # Pandas DataFrame to hold trace data
         self.df = self.create_dataframe()
 
-    def create_dataframe(self) -> pd.DataFrame:
+    def create_dataframe(self) -> pd.DataFrame|None:
         """
         Create a new DataFrame with the specified columns.
 
