@@ -11,10 +11,10 @@ from anytree import AnyNode, RenderTree
 from graphviz import Digraph
 
 if TYPE_CHECKING:
-    from .component import Component
+    from .component import Component, Any
 
 class Visualization:
-    _nodes = {None: AnyNode(id="root")}
+    _nodes: dict[Any|Component, AnyNode] = {None: AnyNode(id="root")}
 
     @staticmethod
     def add_component(component: Component) -> None:
@@ -39,7 +39,7 @@ class Visualization:
         )
 
     @staticmethod
-    def get_node(component: Component) -> AnyNode:
+    def get_node(component: Component|None) -> AnyNode:
         """
         Retrieve the node associated with the given component from the AVL visualization.
 
@@ -52,7 +52,7 @@ class Visualization:
         return Visualization._nodes[component]
 
     @staticmethod
-    def tree(component: Component = None) -> str:
+    def tree(component: Component|None = None) -> str:
         """
         Returns a string representation of the AVL visualization tree.
         This method traverses the AVL visualization tree and constructs a string
@@ -64,12 +64,12 @@ class Visualization:
         :rtype: str
         """
         retval = ""
-        for pre, _fill, node in RenderTree(Visualization.get_node(component)):
+        for pre, _, node in RenderTree(Visualization.get_node(component)):
             retval += f"{pre}{node.id}\n"
         return retval
 
     @staticmethod
-    def diagram(component: Component = None) -> None:
+    def diagram(component: Component|None = None) -> None:
         """
         Generates a diagram of the AVL visualization tree using Graphviz.
         This method creates a directed graph representation of the AVL visualization tree,
@@ -79,12 +79,6 @@ class Visualization:
         :param component: The component whose subtree is to be represented.
         :type component: Any
         """
-
-        def get_component(node):
-            for k, v in Visualization._nodes.items():
-                if node == v:
-                    return k
-            return None
 
         def add_subgraph(dot, node):
             if node.children:
