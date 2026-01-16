@@ -43,7 +43,7 @@ class Trace(Component):
         self.columns: list[str]|None = None
 
         # Pandas DataFrame to hold trace data
-        self.df = self.create_dataframe()
+        self.df: pd.DataFrame|None = self.create_dataframe()
 
     def create_dataframe(self) -> pd.DataFrame|None:
         """
@@ -96,6 +96,7 @@ class Trace(Component):
                             self.columns.append(k)
 
                 self.df = self.create_dataframe()
+                assert self.df is not None
 
             # Create a row dictionary for the DataFrame
             # Populate the row with item attributes
