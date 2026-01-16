@@ -14,7 +14,7 @@ from .var import Var
 
 
 class Coverbin(Component):
-    def __init__(self, name: str, parent: Any, *args: list[Any], **kwargs: list[Any]) -> None:
+    def __init__(self, name: str, parent: Any, *args: Any, **kwargs: Any) -> None:
         """
         Initialize an instance of the Coverbin class.
 
