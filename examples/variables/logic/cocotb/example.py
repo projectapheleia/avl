@@ -94,6 +94,19 @@ class example_env(avl.Env):
         assert id(a) == a_id  # a should still point to the same object
         assert id(c) != a_id  # c should still point to a different object
 
+        # slices
+        c = avl.Logic(0xdeadbeef, width=32)
+        assert c[0:8] == 0xef
+        assert c[24:32] == 0xde
+        assert c[8:24] == 0xadbe
+        assert c[19] == 1
+        assert c[14] == 0
+
+        c[8:16] = 0xab
+        assert c == 0xdeadabef
+        c[3] = 0
+        assert c == 0xdeadabe7
+
         self.info("Unsigned logic and arithmetic operations passed successfully.")
 
     def test_randomization(self):

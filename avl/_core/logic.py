@@ -95,4 +95,43 @@ class Logic(Var):
         """
         return BitVec(f"{self._idx_}", self.width)
 
+    def __getitem__(self, key):
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [lower_bound:upper_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+
+            mask = (1 << (key.stop - key.start))-1
+            rshift_width = key.start
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+
+            mask = 0x1
+            rshift_width = key
+        else:
+            raise ValueError(f"Unsupported slice type: {type(key)}")
+
+        return (self.value >> rshift_width) & mask
+
+    def __setitem__(self, key, value):
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [lower_bound:upper_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+
+            mask = (1 << (key.stop - key.start))-1
+            lshift_width = key.start
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+
+            mask = 0x1
+            lshift_width = key
+        else:
+            raise ValueError(f"Unsupported slice type: {type(key)}")
+
+        self.value = (self.value & ~(mask << lshift_width)) | ((value & mask) << lshift_width)
+
+
 __all__ = ["Logic"]

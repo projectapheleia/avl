@@ -65,6 +65,15 @@ bitwise operations. However, due to this they can be slower to randomize than \
 :doc:`avl.Int </modules/avl._core.int>` and :doc:`avl.Uint </modules/avl._core.uint>` objects which \
 only support arithmetic constraints.
 
+:doc:`avl.Logic </modules/avl._core.logic>` and its children (i.e. :doc:`avl.Uint </modules/avl._core.uint>`, \
+:doc:`avl.Int </modules/avl._core.int>` and :doc:`avl.Bool </modules/avl._core.bool>`) all support bit slice access with the following constraints:
+
+- Single-index slices are supported, e.g. ``myvar[31]`` will return bit 31 of ``myvar``.
+- Slice indexes follow the same rule as for strings and lists: ``myvar[0:8]`` will access **bits 0 to 7** of ``myvar``.
+- Slice indexes must always be positive.
+- SystemVerilog-like accesses where the greater index is first (e.g. ``myvar[8:0]``), are not supported.
+- Steps (e.g. ``myvar[0:8:1]``) are not supported.
+
 Integer / Logic Example
 -----------------------
 .. literalinclude:: ../../../examples/variables/logic/cocotb/example.py
