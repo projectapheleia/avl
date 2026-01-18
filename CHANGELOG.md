@@ -1,6 +1,9 @@
 # Changelog
 
+## [v0.4.2] - 2026-01-18
+
 ### Added
+
  - [#62](https://github.com/projectapheleia/avl/pull/62) Add slice support for vars
 
 ### Fixed
