@@ -10,7 +10,7 @@ import os
 import random
 import warnings
 from collections.abc import MutableMapping, MutableSequence, Set
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
 import tabulate
 from z3 import BitVecNumRef, BoolRef, BV2Int, IntNumRef, Optimize, RatNumRef, sat
@@ -179,7 +179,7 @@ class Object:
 
         return new_obj
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+    def __new__(cls, *args: Any, **kwargs: Any) -> Object:
         """
         Create a new instance of Object or its subclass.
 

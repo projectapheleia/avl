@@ -9,7 +9,6 @@
 ### Fixed
  - [#60](https://github.com/projectapheleia/avl/issues/60) Object(): deepcopy deepcopies all Objects() (including _parent_). Should just copy (reference)
  - [#61](https://github.com/projectapheleia/avl/issues/61) Object(): deepcopy attempts to deepcopy hdl handles. These don't pickle so fail
- - [#63](https://github.com/projectapheleia/avl/pull/63)   fix(object): Display correct type hint with pyright
 
 ## [v0.4.1] - 2026-01-06
 
