@@ -29,7 +29,7 @@ class example_env(avl.Env):
         self.raise_objection()
 
         for i in range(10):
-            await Timer(10, units="ns")
+            await Timer(10, unit="ns")
 
             self.dut.value = self.s0.to_bits()
 
@@ -60,7 +60,7 @@ class example_env(avl.Env):
 
         for _ in range(10):
 
-            await Timer(10, units="ns")
+            await Timer(10, unit="ns")
             self.randomize()
 
             self.s0.to_hdl(self.dut)
@@ -74,7 +74,16 @@ class example_env(avl.Env):
             assert self.s0.state_enum == self.s1.state_enum
 
             assert self.s0_copy.multi_bit.value == 200
-        await Timer(10, units="ns")
+        await Timer(10, unit="ns")
+
+        # Test the .value shortcut
+        self.s0.value = 0
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 0
+        assert self.s0.value == 0
+
+        self.s0.value = 1
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 1
+        assert self.s0.value == 1
         self.drop_objection()
 
 @cocotb.test

@@ -128,7 +128,10 @@ class Struct(metaclass=_StructMeta_):
 
         :return: None
         """
-        _value = int(value)
+        if hasattr(value, "value"):
+            _value = int(value.value)
+        else:
+            _value = int(value)
         for name, _ in reversed(self._fields_):
             v = getattr(self, name)
             v.value = _value & ((1 << v.width) - 1)
@@ -151,5 +154,22 @@ class Struct(metaclass=_StructMeta_):
                 h = getattr(hdl, name, None)
                 if h is not None:
                     s.value = h.value
+
+    @property
+    def value(self):
+        """
+        Property to abstract the value and ensure it's always cast when assigned
+        """
+        return self.to_bits()
+
+    @value.setter
+    def value(self, v):
+        """
+        Setter property to enforce wraps etc. when assigned directly
+
+        :param v: The Value to assig
+        :type v : Andy
+        """
+        self.from_bits(v)
 
 __all__ = ["Struct"]
