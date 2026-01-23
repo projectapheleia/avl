@@ -24,6 +24,8 @@ class example_env(avl.Env):
         self.s0 = packed_struct_t()
         self.s1 = packed_struct_t()
 
+        assert self.s0.width == self.s1.width == 35
+
     async def run_phase(self):
 
         self.raise_objection()
@@ -84,6 +86,18 @@ class example_env(avl.Env):
         self.s0.value = 1
         assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 1
         assert self.s0.value == 1
+
+        # Test the slice shortcuts
+        self.s0.value = 0
+        self.s0[34] = 1
+        assert self.s0.single_bit.value == 1 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 0
+        assert self.s0[34] == 1
+
+        self.s0.value = 0
+        self.s0[2:34] = 0xdeadbeef
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0xdeadbeef and self.s0.state_enum.value == 0
+        assert self.s0[2:34] == 0xdeadbeef
+
         self.drop_objection()
 
 @cocotb.test

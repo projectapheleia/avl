@@ -6,6 +6,7 @@
 
  - [#62](https://github.com/projectapheleia/avl/pull/62) Add slice support for vars
  - Added "value" attribute for structs to be more consistent with Vars. No change in behavior. New way of accessing
+ - [#69](https://github.com/projectapheleia/avl/issues/69) Struct(): Support slice operations
 
 ### Fixed
  - [#60](https://github.com/projectapheleia/avl/issues/60) Object(): deepcopy deepcopies all Objects() (including _parent_). Should just copy (reference)
