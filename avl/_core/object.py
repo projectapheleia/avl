@@ -108,8 +108,8 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
             try:
                 try:
                     copied = copy.deepcopy(obj, memo)
-                except:
-                    warnings.warn(f"Attempt to deepcopy unsupported object (returning original) : {obj}",
+                except Exception as e:
+                    warnings.warn(f"Attempt to deepcopy unsupported object (returning original) {e} : {obj}",
                                   UserWarning,
                                   stacklevel=2)
                     copied = obj

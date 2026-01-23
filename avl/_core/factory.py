@@ -4,8 +4,11 @@
 # Apheleia Verification Library Factory
 import fnmatch
 import re
+from collections.abc import Callable
+from typing import Any
+
 import tabulate
-from typing import Any, Dict, Optional, Callable
+
 
 class Factory:
     _by_type = {}
@@ -22,7 +25,7 @@ class Factory:
     _fmt = "grid"
 
     @staticmethod
-    def _compile_regex(mapping: Dict[str, Callable]) -> tuple[Optional[re.Pattern], Dict[str, Callable]]:
+    def _compile_regex(mapping: dict[str, Callable]) -> tuple[re.Pattern | None, dict[str, Callable]]:
         """
         Compile glob patterns into a single regex with named groups.
 
@@ -41,7 +44,7 @@ class Factory:
             reverse=True,
         )
 
-        group_to_handler: Dict[str, Callable] = {}
+        group_to_handler: dict[str, Callable] = {}
         regex_parts = []
 
         for i, glob in enumerate(sorted_patterns):

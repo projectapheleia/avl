@@ -128,7 +128,10 @@ class Struct(metaclass=_StructMeta_):
 
         :return: None
         """
-        _value = int(value)
+        if hasattr(value, "value"):
+            _value = int(value.value)
+        else:
+            _value = int(value)
         for name, _ in reversed(self._fields_):
             v = getattr(self, name)
             v.value = _value & ((1 << v.width) - 1)
@@ -151,5 +154,90 @@ class Struct(metaclass=_StructMeta_):
                 h = getattr(hdl, name, None)
                 if h is not None:
                     s.value = h.value
+
+    @property
+    def value(self):
+        """
+        Property to abstract the value and ensure it's always cast when assigned
+        """
+        return self.to_bits()
+
+    @value.setter
+    def value(self, v):
+        """
+        Setter property to enforce wraps etc. when assigned directly
+
+        :param v: The Value to assig
+        :type v : Andy
+        """
+        self.from_bits(v)
+
+    @property
+    def width(self) -> int:
+        """
+        Calculate the total width of the Struct instance.
+        This property sums the widths of all fields to determine the overall width.
+
+        :return: The total width of the Struct instance.
+        """
+        total_width = 0
+        for name, _ in self._fields_:
+            v = getattr(self, name)
+            total_width += v.width
+        return total_width
+
+    def __getitem__(self, key):
+        """
+        Get a slice or single bit from the Struct instance.
+        This method allows for slicing or indexing the Struct instance to
+        retrieve specific bits or ranges of bits.
+
+        :param key: A slice or integer index to specify the bits to retrieve.
+        :return: The value of the specified bits.
+        """
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [lower_bound:upper_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+
+            mask = (1 << (key.stop - key.start))-1
+            rshift_width = key.start
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+
+            mask = 0x1
+            rshift_width = key
+        else:
+            raise ValueError(f"Unsupported slice type: {type(key)}")
+
+        return (self.value >> rshift_width) & mask
+
+    def __setitem__(self, key, value):
+        """
+        Set a slice or single bit in the Struct instance.
+        This method allows for slicing or indexing the Struct instance to
+        set specific bits or ranges of bits.
+
+        :param key: A slice or integer index to specify the bits to set.
+        :param value: The value to set for the specified bits.
+        """
+        if isinstance(key, slice):
+            assert key.start >= 0 and key.stop >= 0, "Slice indexes must be positive integers"
+            assert key.stop >= key.start, "Only [lower_bound:upper_bound] format is supported"
+            assert key.step is None, "Steps are not supported"
+            assert key.stop <= self.width, f"Cannot index [{key.start}:{key.stop}] in var of width {self.width}"
+
+            mask = (1 << (key.stop - key.start))-1
+            lshift_width = key.start
+        elif isinstance(key, int):
+            assert key >= 0 and key <= self.width, f"Cannot index {key} in var of width {self.width}"
+
+            mask = 0x1
+            lshift_width = key
+        else:
+            raise ValueError(f"Unsupported slice type: {type(key)}")
+
+        self.value = (self.value & ~(mask << lshift_width)) | ((value & mask) << lshift_width)
 
 __all__ = ["Struct"]

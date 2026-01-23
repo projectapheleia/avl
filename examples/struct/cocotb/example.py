@@ -9,6 +9,7 @@ import copy
 import avl
 import cocotb
 from cocotb.triggers import Timer
+from z3 import ULT
 
 
 class packed_struct_t(avl.Struct):
@@ -23,12 +24,14 @@ class example_env(avl.Env):
         self.s0 = packed_struct_t()
         self.s1 = packed_struct_t()
 
+        assert self.s0.width == self.s1.width == 35
+
     async def run_phase(self):
 
         self.raise_objection()
 
         for i in range(10):
-            await Timer(10, units="ns")
+            await Timer(10, unit="ns")
 
             self.dut.value = self.s0.to_bits()
 
@@ -51,7 +54,7 @@ class example_env(avl.Env):
 
         # Test randomization
         self.s0_copy = copy.deepcopy(self.s0)
-        self.s0.multi_bit.add_constraint("c_multi_bit", lambda x: x < 100)
+        self.s0.multi_bit.add_constraint("c_multi_bit", lambda x: ULT(x,100))
         self.s0_copy.multi_bit.add_constraint("c_multi_bit", lambda x: x == 200)
         self.s0.single_bit.value = 0
         self.s0.multi_bit.value = 0
@@ -59,7 +62,7 @@ class example_env(avl.Env):
 
         for _ in range(10):
 
-            await Timer(10, units="ns")
+            await Timer(10, unit="ns")
             self.randomize()
 
             self.s0.to_hdl(self.dut)
@@ -73,7 +76,28 @@ class example_env(avl.Env):
             assert self.s0.state_enum == self.s1.state_enum
 
             assert self.s0_copy.multi_bit.value == 200
-        await Timer(10, units="ns")
+        await Timer(10, unit="ns")
+
+        # Test the .value shortcut
+        self.s0.value = 0
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 0
+        assert self.s0.value == 0
+
+        self.s0.value = 1
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 1
+        assert self.s0.value == 1
+
+        # Test the slice shortcuts
+        self.s0.value = 0
+        self.s0[34] = 1
+        assert self.s0.single_bit.value == 1 and self.s0.multi_bit.value == 0 and self.s0.state_enum.value == 0
+        assert self.s0[34] == 1
+
+        self.s0.value = 0
+        self.s0[2:34] = 0xdeadbeef
+        assert self.s0.single_bit.value == 0 and self.s0.multi_bit.value == 0xdeadbeef and self.s0.state_enum.value == 0
+        assert self.s0[2:34] == 0xdeadbeef
+
         self.drop_objection()
 
 @cocotb.test
