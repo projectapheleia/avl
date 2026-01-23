@@ -14,6 +14,8 @@
  - [#63](https://github.com/projectapheleia/avl/pull/63)   fix(object): Display correct type hint with pyright
  - [#64](https://github.com/projectapheleia/avl/pull/64)   fix: Unsupported 'Self' annotation in python 3.10
  - [#67](https://github.com/projectapheleia/avl/pull/67)   fix(example): Adjust constraint to use z3.ULT
+ - [#66](https://github.com/projectapheleia/avl/issues/66) Struct(): to_bits and from_bits does not support nested structs
+ - [#68](https://github.com/projectapheleia/avl/pull/68) fix(struct): add suport for nested structs in to_bits and from_bits functions
 
 ## [v0.4.1] - 2026-01-06
 
