@@ -9,7 +9,6 @@ import time
 import avl
 import cocotb
 
-from z3 import And, Or
 
 class example_env(avl.Env):
     def __init__(self, name, parent):
