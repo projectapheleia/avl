@@ -85,19 +85,36 @@ class Struct(metaclass=_StructMeta_):
 
     def to_bits(self) -> int:
         """
+        Calls the to_bits_w_width function and only returns the value.
+
+        :return: An integer representing the combined bit value of the Struct.
+        """
+        value, width = self.to_bits_w_width()
+        return int(value)
+
+    def to_bits_w_width(self) -> tuple[int, int]:
+        """
         Convert the Struct instance to a bit representation.
         This method combines the values of all fields into a single integer,
         where each field's value is shifted according to its width.
 
-        :return: An integer representing the combined bit value of the Struct.
+        :return: An a tupple of integers representing the combined bit
+        value of the Struct, plus the size of it.
         """
         value = 0
         offset = 0
         for name, _ in reversed(self._fields_):
             v = getattr(self, name)
-            value |= (v.value << offset)
-            offset += v.width
-        return int(value)
+            #check if this field (v) is also a struct, if yes, call this function recursively
+            if hasattr(v, 'value'):
+                value |= (v.value << offset)
+                offset += v.width
+            else:
+                aux_value, aux_width = (v.to_bits_w_width())
+                value |= (aux_value << offset)
+                offset += aux_width
+        return int(value), int(offset)
+
 
     def to_hdl(self, hdl : HierarchyObject) -> None:
         """
@@ -118,7 +135,7 @@ class Struct(metaclass=_StructMeta_):
                 if h is not None:
                     h.value = s.value
 
-    def from_bits(self, value : int) -> None:
+    def from_bits(self, value : int) -> int:
         """
         Populate the Struct instance from a bit representation.
         This method takes an integer value and assigns each field's value
@@ -126,13 +143,18 @@ class Struct(metaclass=_StructMeta_):
 
         :param value: An integer representing the combined bit value of the Struct.
 
-        :return: None
+        :return: Bits that remains after setting all values to the struct fields
         """
         _value = int(value)
         for name, _ in reversed(self._fields_):
             v = getattr(self, name)
-            v.value = _value & ((1 << v.width) - 1)
-            _value >>= v.width
+            #check if this field (v) is also a struct, if yes, call this function recursively
+            if hasattr(v, 'value'):
+                v.value = _value & ((1 << v.width) - 1)
+                _value >>= v.width
+            else:
+                _value = v.from_bits(_value)
+        return int(_value)
 
     def from_hdl(self, hdl : HierarchyObject) -> None:
         """
