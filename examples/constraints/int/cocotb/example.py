@@ -6,7 +6,7 @@
 
 import avl
 import cocotb
-from z3 import *
+from z3 import And, Extract
 
 
 class example_env(avl.Env):

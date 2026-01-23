@@ -3,9 +3,10 @@
 # Description:
 # Apheleia Verification Library Memory Model
 
+import warnings
+
 import bincopy
 import pandas as pd
-import warnings
 
 
 class Memory:
@@ -236,7 +237,7 @@ class Memory:
         # Check params
         if (num_bytes is not None) and (strobe is not None):
             if num_bytes != self.nbytes:
-                warnings.warn(f"num_bytes != memory width for write with strobe - overriding to memory width",
+                warnings.warn("num_bytes != memory width for write with strobe - overriding to memory width",
                               UserWarning,
                               stacklevel=2)
                 num_bytes = self.nbytes

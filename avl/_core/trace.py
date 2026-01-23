@@ -3,9 +3,8 @@
 # Description:
 # Apheleia Verification Library Trace
 
-from collections.abc import MutableMapping, MutableSequence
-
 import os
+from collections.abc import MutableMapping, MutableSequence
 
 import cocotb
 import pandas as pd

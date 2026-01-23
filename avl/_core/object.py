@@ -10,7 +10,7 @@ import os
 import random
 import warnings
 from collections.abc import MutableMapping, MutableSequence, Set
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
 from z3 import BitVecNumRef, BoolRef, BV2Int, IntNumRef, Optimize, RatNumRef, sat
@@ -108,8 +108,8 @@ def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = No
             try:
                 try:
                     copied = copy.deepcopy(obj, memo)
-                except:
-                    warnings.warn(f"Attempt to deepcopy unsupported object (returning original) : {obj}",
+                except Exception as e:
+                    warnings.warn(f"Attempt to deepcopy unsupported object (returning original) {e} : {obj}",
                                   UserWarning,
                                   stacklevel=2)
                     copied = obj
@@ -140,6 +140,9 @@ def _patch_constraints_(obj : Object, new_obj : Object, conversion: dict[Any, in
         for k, v in obj._constraints_[truth_value].items():
             new_v = [conversion[id(o)] for o in v[1]]
             new_obj._constraints_[truth_value][k] = (v[0], new_v)
+
+
+TObject = TypeVar("TObject", bound="Object")
 
 class Object:
 
@@ -179,7 +182,7 @@ class Object:
 
         return new_obj
 
-    def __new__(cls, *args: Any, **kwargs: Any) -> Self:
+    def __new__(cls, *args: Any, **kwargs: Any) -> TObject:
         """
         Create a new instance of Object or its subclass.
 

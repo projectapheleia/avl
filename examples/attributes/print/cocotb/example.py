@@ -4,9 +4,10 @@
 # Apheleia attributes example
 
 
+from collections import OrderedDict, defaultdict
+
 import avl
 import cocotb
-from collections import OrderedDict, defaultdict
 
 
 class example_env(avl.Env):
