@@ -33,6 +33,7 @@ sim: $(SIMS)
 	pass_count=$$(find . -name '*.passed' | wc -l); \
 	fail_count=$$(find . -name '*.failed' | wc -l); \
 	echo "$$pass_count tests passed, $$fail_count tests failed"; \
+	if [[ $$fail_count > 0 ]]; then exit 1; fi
 
 .PHONY: clean
 clean: $(CLEANS)

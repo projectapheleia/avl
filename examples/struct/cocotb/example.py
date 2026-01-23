@@ -9,6 +9,7 @@ import copy
 import avl
 import cocotb
 from cocotb.triggers import Timer
+from z3 import ULT
 
 
 class packed_struct_t(avl.Struct):
@@ -51,7 +52,7 @@ class example_env(avl.Env):
 
         # Test randomization
         self.s0_copy = copy.deepcopy(self.s0)
-        self.s0.multi_bit.add_constraint("c_multi_bit", lambda x: x < 100)
+        self.s0.multi_bit.add_constraint("c_multi_bit", lambda x: ULT(x,100))
         self.s0_copy.multi_bit.add_constraint("c_multi_bit", lambda x: x == 200)
         self.s0.single_bit.value = 0
         self.s0.multi_bit.value = 0

@@ -6,6 +6,7 @@
 
 import avl
 import cocotb
+from z3 import ULT
 
 
 class example_env(avl.Env):
@@ -33,7 +34,7 @@ async def test(dut):
 
     # Add conflicting hard constraint - ok as last one was removed
     for _ in range(100):
-        e.randomize(hard=[(lambda x: x < 100, e.a)])
+        e.randomize(hard=[(lambda x: ULT(x,100), e.a)])
         assert e.a < 100
 
     # Add soft constraint - ok as no conflict
