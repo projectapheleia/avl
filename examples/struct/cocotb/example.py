@@ -119,7 +119,7 @@ class example_env(avl.Env):
 
     def check_struct(self, struct, expected):
         self.info(f"Struct:{struct}")
-        for field_name, field_type in struct._fields_:
+        for field_name, _field_type in struct._fields_:
             field_val = getattr(struct, field_name)
             if hasattr(field_val, '_fields_'):  # it's a nested struct
                 self.check_struct(field_val, expected)
@@ -147,10 +147,10 @@ class example_env(avl.Env):
         full_struct = struct_a_b_c_d_t()
         #using the from_bits function
         full_struct.from_bits(init_val)
-        self.info(f"Calling check_struct for inital value")
+        self.info("Calling check_struct for inital value")
         self.check_struct(full_struct, expected)
         #using the to_bits function
-        self.info(f"Setting a varible using to_bits function")
+        self.info("Setting a varible using to_bits function")
         to_bits_var = full_struct.to_bits()
         self.info(f"Value set is equal to {hex(to_bits_var)}")
         assert to_bits_var == init_val, f"to_bits is not working. Expected {hex(init_val)}, Actual: {hex(to_bits_var)}"

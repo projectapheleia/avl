@@ -1,21 +1,27 @@
 # Changelog
 
+## [v0.4.3] - 2026-01-23
+
+### Added
+ - Added "value" attribute for structs to be more consistent with Vars. No change in behavior. New way of accessing
+ - [#69](https://github.com/projectapheleia/avl/issues/69) Struct(): Support slice operations
+
+### Fixed
+ - [#64](https://github.com/projectapheleia/avl/pull/64)   fix: Unsupported 'Self' annotation in python 3.10
+ - [#67](https://github.com/projectapheleia/avl/pull/67)   fix(example): Adjust constraint to use z3.ULT
+ - [#66](https://github.com/projectapheleia/avl/issues/66) Struct(): to_bits and from_bits does not support nested structs
+ - [#68](https://github.com/projectapheleia/avl/pull/68) fix(struct): add suport for nested structs in to_bits and from_bits functions
+
 ## [v0.4.2] - 2026-01-18
 
 ### Added
-
  - [#62](https://github.com/projectapheleia/avl/pull/62) Add slice support for vars
- - Added "value" attribute for structs to be more consistent with Vars. No change in behavior. New way of accessing
- - [#69](https://github.com/projectapheleia/avl/issues/69) Struct(): Support slice operations
 
 ### Fixed
  - [#60](https://github.com/projectapheleia/avl/issues/60) Object(): deepcopy deepcopies all Objects() (including _parent_). Should just copy (reference)
  - [#61](https://github.com/projectapheleia/avl/issues/61) Object(): deepcopy attempts to deepcopy hdl handles. These don't pickle so fail
  - [#63](https://github.com/projectapheleia/avl/pull/63)   fix(object): Display correct type hint with pyright
- - [#64](https://github.com/projectapheleia/avl/pull/64)   fix: Unsupported 'Self' annotation in python 3.10
- - [#67](https://github.com/projectapheleia/avl/pull/67)   fix(example): Adjust constraint to use z3.ULT
- - [#66](https://github.com/projectapheleia/avl/issues/66) Struct(): to_bits and from_bits does not support nested structs
- - [#68](https://github.com/projectapheleia/avl/pull/68) fix(struct): add suport for nested structs in to_bits and from_bits functions
+
 
 ## [v0.4.1] - 2026-01-06
 
