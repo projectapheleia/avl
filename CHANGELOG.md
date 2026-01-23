@@ -2,6 +2,10 @@
 
 ## [v0.4.2] - 2026-01-18
 
+### Fixed
+ - [#66](https://github.com/projectapheleia/avl/issues/66) Struct(): to_bits and from_bits does not support nested structs
+ - [#68](https://github.com/projectapheleia/avl/pull/68) fix(struct): add suport for nested structs in to_bits and from_bits functions
+
 ### Added
 
  - [#62](https://github.com/projectapheleia/avl/pull/62) Add slice support for vars
