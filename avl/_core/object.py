@@ -197,8 +197,17 @@ class Object:
         if not args and not kwargs:
             return super().__new__(cls)
 
-        name = args[0]
-        parent = args[1]
+        if args:
+            name = args[0]
+            parent = args[1] if len(args) > 1 else None
+        else:
+            # Handle keyword arguments
+            name = kwargs.get('name')
+            parent = kwargs.get('parent')
+        
+        # Validate we have required parameters
+        if name is None:
+            raise TypeError(f"{cls.__name__} requires 'name' parameter")
         path = name
 
         # No factory for hidden Objects
