@@ -1,5 +1,8 @@
 # Changelog
 
+### Fixed
+ - [#71](https://github.com/projectapheleia/avl/issues/71) Object(): kwargs (name, parent) break __new__
+
 ## [v0.4.3] - 2026-01-23
 
 ### Added
