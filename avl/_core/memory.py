@@ -4,14 +4,13 @@
 # Apheleia Verification Library Memory Model
 
 import warnings
+from collections.abc import Callable
+from typing import Literal, TypeAlias
 
 import bincopy
 import pandas as pd
 
-from typing import Callable, Literal
-
-type Endianness = Literal['little', 'big']
-
+Endianness: TypeAlias = Literal['little', 'big']
 
 class Memory:
 

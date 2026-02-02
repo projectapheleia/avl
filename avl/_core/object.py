@@ -9,8 +9,8 @@ import copy
 import os
 import random
 import warnings
-from collections.abc import MutableMapping, MutableSequence, Set
-from typing import TYPE_CHECKING, Any, TypeVar, Callable
+from collections.abc import Callable, MutableMapping, MutableSequence, Set
+from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
 from z3 import BitVecNumRef, BoolRef, BV2Int, IntNumRef, Optimize, RatNumRef, sat

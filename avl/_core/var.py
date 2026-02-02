@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, ArithRef, BitVecRef, sat
+from z3 import ArithRef, BitVecNumRef, BitVecRef, BoolRef, IntNumRef, Optimize, RatNumRef, sat
 
 
 class Var:
@@ -364,7 +364,7 @@ class Var:
 
         return any(self._constraints_.values())
 
-    def randomize(self, hard: list = [], soft: list = []) -> None:
+    def randomize(self, hard: list|None = None, soft: list|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
         It uses an optimization solver to find a suitable value that satisfies the constraints.

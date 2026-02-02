@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject, LogicObject
+from cocotb.simtime import Steps, TimeUnitWithoutSteps
 from cocotb.triggers import RisingEdge, Timer
-from cocotb.simtime import TimeUnitWithoutSteps, Steps
 
 from .component import Component
 
@@ -79,7 +79,7 @@ class Env(Component):
         clk.value = 0
         await Clock(clk, period_ps, "ps").start()
 
-    async def ticker(self, duration: int, msg: str, units: TimeUnit = "ns") -> None:
+    async def ticker(self, duration: int, msg: str, units: TimeUnitWithoutSteps|Steps = "ns") -> None:
         """
         Log a message at regular intervals.
 
@@ -94,7 +94,7 @@ class Env(Component):
             await Timer(duration, units)
             self.info(msg)
 
-    async def timeout(self, duration: int, units: TimeUnit = "ns") -> None:
+    async def timeout(self, duration: int, units: TimeUnitWithoutSteps|Steps = "ns") -> None:
         """
         Raise a timeout exception after a specified duration.
 

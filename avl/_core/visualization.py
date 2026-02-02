@@ -11,7 +11,7 @@ from anytree import AnyNode, RenderTree
 from graphviz import Digraph
 
 if TYPE_CHECKING:
-    from .component import Component, Any
+    from .component import Any, Component
 
 class Visualization:
     _nodes: dict[Any|Component, AnyNode] = {None: AnyNode(id="root")}

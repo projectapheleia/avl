@@ -3,7 +3,8 @@
 # Description:
 # Apheleia Verification Library List
 
-from typing import Any, Iterable, SupportsIndex
+from collections.abc import Iterable
+from typing import Any, SupportsIndex
 
 from cocotb.triggers import Event
 

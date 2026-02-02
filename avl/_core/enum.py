@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-from z3 import Int, Or, ArithRef
+from z3 import ArithRef, Int, Or
 
 from .var import Var
 

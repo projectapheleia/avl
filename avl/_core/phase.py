@@ -3,7 +3,7 @@
 # Description:
 # Apheleia Verification Library Phase Functions
 
-from typing import Any,Self
+from typing import Any, Self
 
 from cocotb.triggers import Event
 
