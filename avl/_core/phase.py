@@ -3,7 +3,9 @@
 # Description:
 # Apheleia Verification Library Phase Functions
 
-from typing import Any, Self
+from __future__ import annotations
+
+from typing import Any
 
 from cocotb.triggers import Event
 
@@ -25,7 +27,7 @@ class Phase:
         self.objections = {}
         self._objection_ev = Event()
 
-    def insert(self, after: Self|None = None) -> None:
+    def insert(self, after: Phase|None = None) -> None:
         """
         Inserts the phase after another phase.
 
