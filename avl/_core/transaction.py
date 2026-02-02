@@ -8,7 +8,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from cocotb.triggers import Event, TimeUnit
+from cocotb.triggers import Event
+from cocotb.simtime import TimeUnitWithoutSteps, Steps
 from cocotb.utils import get_sim_time
 
 from .object import Object
@@ -75,7 +76,7 @@ class Transaction(Object):
         else:
             return None
 
-    def set_event(self, name: str, unit: TimeUnit = "ns",*args: Any, **kwargs: Any) -> None:
+    def set_event(self, name: str, unit: TimeUnitWithoutSteps|Steps = "ns",*args: Any, **kwargs: Any) -> None:
         """
         Set an event and trigger its callbacks.
 
@@ -89,7 +90,7 @@ class Transaction(Object):
 
         for cb in self._events_[name][2]:
             if cb is not None:
-                cb(*args, **kwargs)
+                cb(self, *args, **kwargs)
 
     async def wait_on_event(self, name: str) -> None:
         """

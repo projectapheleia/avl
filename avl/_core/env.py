@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject, LogicObject
-from cocotb.triggers import RisingEdge, Timer, TimeUnit
+from cocotb.triggers import RisingEdge, Timer
+from cocotb.simtime import TimeUnitWithoutSteps, Steps
 
 from .component import Component
 
@@ -45,7 +46,7 @@ class Env(Component):
         rst.value = int(not active_high)
 
     async def async_reset(
-        self, rst: HierarchyObject, duration: int, units: TimeUnit = "ns", active_high: bool = True
+        self, rst: HierarchyObject, duration: int, units: TimeUnitWithoutSteps|Steps = "ns", active_high: bool = True
     ) -> None:
         """
         Perform an asynchronous reset.

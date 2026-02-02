@@ -32,8 +32,6 @@ class SequenceItem(Transaction):
         elif isinstance(parent, Sequencer):
             self._parent_sequencer_ = parent
 
-        assert self._parent_sequencer_ is not None
-
         super().__init__(name, self._parent_sequencer_)
 
         self.add_event("done")

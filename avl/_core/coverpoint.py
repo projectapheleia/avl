@@ -64,7 +64,7 @@ class Coverpoint(Component):
         self.at_least = at_least
 
 
-    def add_bin(self, name: str, *args: list[Any], **kwargs: list[Any]) -> None:
+    def add_bin(self, name: str, *args: Any, **kwargs: Any) -> None:
         """
         Add a bin to the AVL coverpoint.
 

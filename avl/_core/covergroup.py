@@ -84,7 +84,7 @@ class Covergroup(Component):
         """
         if name not in self._cps_:
             self._cps_[name] = Covercross(name, self)
-            self._cps_[name].add_points(*args)
+            self._cps_[name].add_points(args)
         else:
             raise ValueError(f"Covercross {name} already exists")
         return self._cps_[name]
