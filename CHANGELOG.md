@@ -2,6 +2,7 @@
 
 ### Fixed
  - [#71](https://github.com/projectapheleia/avl/issues/71) Object(): kwargs (name, parent) break __new__
+ - [#74](https://github.com/projectapheleia/avl/issues/74) Factory overrides carry over from one test to the other.
 
 ## [v0.4.3] - 2026-01-23
 
