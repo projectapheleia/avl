@@ -13,9 +13,6 @@ from cocotb.handle import HierarchyObject, SimHandleBase
 
 
 class _StructMeta_(type):
-    def __init__(cls, *_: Any):
-        cls._fields_ = []
-
     def __new__(mcs, name, bases, namespace):
         """
         Custom metaclass to automatically collect field annotations

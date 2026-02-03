@@ -48,7 +48,7 @@ class Factory:
         regex_parts = []
 
         for i, glob in enumerate(sorted_patterns):
-            group_name = f"g{i}"
+            group_name = f"m{i}"
             regex = fnmatch.translate(glob)
             regex_parts.append(f"(?P<{group_name}>{regex})")
             group_to_handler[group_name] = mapping[glob]
