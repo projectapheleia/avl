@@ -8,7 +8,18 @@ from collections.abc import Callable
 from typing import Any
 
 import tabulate
+from cocotb.regression import RegressionManager
 
+# Monkey patching regression manager
+# Allows factory to be cleared between tests
+_original_init_test = RegressionManager._init_test
+
+def _patched_init_test(self):
+    Factory.clear_factory()
+    return _original_init_test(self)
+
+# Apply patch
+RegressionManager._init_test = _patched_init_test
 
 class Factory:
     _by_type = {}
@@ -118,6 +129,23 @@ class Factory:
         score = literal_chars - wildcards + char_classes * 0.5
 
         return (score, len(pattern))
+
+    @staticmethod
+    def clear_factory() -> None:
+        """
+        Remove all factory entries
+        """
+
+        Factory._by_type = {}
+        Factory._by_instance = {}
+        Factory._by_instance_regex = None
+        Factory._by_instance_overrides = []
+        Factory._variables = {}
+        Factory._variables_regex = None
+        Factory._variables_overrides = []
+        Factory._sentinal = object()
+        Factory._fmt = "grid"
+        Factory._test_manager = None
 
     @staticmethod
     def set_override_by_type(original: Any, override: Any) -> None:
