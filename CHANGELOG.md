@@ -1,6 +1,7 @@
 # Changelog
 
 ### Fixed
+ - [#73](https://github.com/projectapheleia/avl/pull/73) Fix pyright lint errors
  - [#71](https://github.com/projectapheleia/avl/issues/71) Object(): kwargs (name, parent) break __new__
 
 ## [v0.4.3] - 2026-01-23
