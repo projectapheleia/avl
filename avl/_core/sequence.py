@@ -45,7 +45,7 @@ class Sequence(SequenceItem):
         return self.priority
 
     async def start_item(
-        self, item: SequenceItem, priority: int = None, sequencer: Sequencer = None
+        self, item: SequenceItem, priority: int|None = None, sequencer: Sequencer|None = None
     ) -> None:
         """
         Starts an item in the sequence.
@@ -64,6 +64,7 @@ class Sequence(SequenceItem):
             _sqr = sequencer
         else:
             _sqr = self.get_sequencer()
+            assert _sqr is not None
 
         item.set_sequencer(_sqr)
 
@@ -84,7 +85,7 @@ class Sequence(SequenceItem):
         if _sqr is None:
             raise Exception("Sequence item has no sequencer")
 
-        _sqr.send_request(self, item)
+        _sqr.send_request(item)
 
         await item.wait_on_event("done")
 

@@ -10,7 +10,7 @@ from .logic import Logic
 
 
 class Bool(Logic):
-    def __init__(self, *args, auto_random: bool = True, fmt : Callable[..., int] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt : Callable[..., str] = str) -> None:
         """
         Initialize an instance of the Bool class.
 

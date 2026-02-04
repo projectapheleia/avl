@@ -31,7 +31,7 @@ class Uint(Logic):
         self,
         *args,
         auto_random: bool = True,
-        fmt: Callable[..., int] = str,
+        fmt: Callable[..., str] = str,
         width: int = 32
     ) -> None:
         """
@@ -51,7 +51,7 @@ class Uint(Logic):
 
 class Uint8(Uint):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -78,7 +78,7 @@ class Uint8(Uint):
 
 class Uint16(Uint):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -105,7 +105,7 @@ class Uint16(Uint):
 
 class Uint32(Uint):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.
@@ -132,7 +132,7 @@ class Uint32(Uint):
 
 class Uint64(Uint):
     def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., int] = str
+        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
     ) -> None:
         """
         Initialize an instance of the class.

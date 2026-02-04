@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import pandas as pd
 
 if TYPE_CHECKING:
-    from .covergroup import CoverGroup
+    from .covergroup import Covergroup
 
 class Coverage:
     _instance = None
@@ -45,16 +45,13 @@ class Coverage:
         if len(self._cg_) == 0:
             return
 
-        df = None
-        for cg in self._cg_:
-            if df is None:
-                df = cg.report(full=True)
-            else:
-                df = pd.concat([df, cg.report(full=True)], ignore_index=True)
+        df = self._cg_[0].report(full=True)
+        for cg in self._cg_[1:]:
+            df = pd.concat([df, cg.report(full=True)], ignore_index=True)
 
         df.to_json("coverage.json", mode="w", orient="records")
 
-    def add_covergroup(self, cg: CoverGroup) -> None:
+    def add_covergroup(self, cg: Covergroup) -> None:
         """
         Add a covergroup to the coverage container
 
@@ -62,7 +59,7 @@ class Coverage:
         """
         self._cg_.append(cg)
 
-    def remove_covergroup(self, cg: CoverGroup) -> None:
+    def remove_covergroup(self, cg: Covergroup) -> None:
         """
         Remove a covergroup from the coverage container
 

@@ -28,7 +28,7 @@ class Covercross(Coverpoint):
         super().__init__(name, parent, var=None)
         self._points_ = []
 
-    def add_points(self, *args: list[Coverpoint]) -> None:
+    def add_points(self, args: list[Coverpoint]) -> None:
         """
         Add coverpoints to the cross.
 

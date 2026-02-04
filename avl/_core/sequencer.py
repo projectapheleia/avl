@@ -39,16 +39,15 @@ class Sequencer(Component):
         self._seqs_ = []
         self._seq_ev_ = Event()
 
-    def send_request(self, seq: Sequence, item: SequenceItem) -> None:
+    def send_request(self, item: SequenceItem) -> None:
         """
         Sends a request to the sequencer.
 
-        :param seq: The sequence sending the request.
         :param item: The item to be sent.
         """
         self.seq_item_export.write(item)
 
-    def arbitrate(self) -> tuple[Sequence, Event, int]:
+    def arbitrate(self) -> tuple[Sequence|None, Event|None, int|None]:
         """
         Arbitrates between available sequences based on their priorities.
 
@@ -97,7 +96,7 @@ class Sequencer(Component):
                 self._locks_.remove((s, ev))
                 break
 
-    def get_lock(self) -> Sequence:
+    def get_lock(self) -> Sequence|None:
         """
         Gets the current lock.
 
@@ -105,7 +104,7 @@ class Sequencer(Component):
         """
         return self.current_lock
 
-    async def wait_for_grant(self, seq: Sequence, priority: int = None) -> None:
+    async def wait_for_grant(self, seq: Sequence, priority: int|None = None) -> None:
         """
         Waits for a grant to run the sequence.
 
@@ -140,8 +139,8 @@ class Sequencer(Component):
                     self._lock_ev_.clear()
 
                 # Arbitrate for the next sequence
-                (seq, ev, priority) = self.arbitrate()
-                if seq is not None:
+                (_, ev, _) = self.arbitrate()
+                if ev is not None:
                     ev.set()
                 else:
                     break

@@ -4,10 +4,13 @@
 # Apheleia Verification Library Memory Model
 
 import warnings
+from collections.abc import Callable
+from typing import Literal, TypeAlias
 
 import bincopy
 import pandas as pd
 
+Endianness: TypeAlias = Literal['little', 'big']
 
 class Memory:
 
@@ -26,8 +29,8 @@ class Memory:
         self.nbytes = width // 8
         self.ranges = []
         self.memory = {}
-        self.endianness = 'little'
-        self.init_fn = lambda address : 0
+        self.endianness: Endianness = 'little'
+        self.init_fn = lambda _ : 0
 
     def _align_address_(self, address: int) -> int:
         """
@@ -40,7 +43,7 @@ class Memory:
         """
         return address & ~(self.nbytes - 1)
 
-    def _check_address_(self, address: int) -> None:
+    def _check_address_(self, address: int) -> bool:
         """
         Check if the address is valid.
 
@@ -111,7 +114,7 @@ class Memory:
 
         return mask
 
-    def set_init_fn(self, fn : callable) -> None:
+    def set_init_fn(self, fn : Callable) -> None:
         """
         Set the initialization policy for the memory
 
@@ -125,7 +128,7 @@ class Memory:
         """
         self.init_fn = fn
 
-    def set_endianness(self, endianness: str) -> None:
+    def set_endianness(self, endianness: Endianness) -> None:
         """
         Set the endianness of the memory (little / big).
 
@@ -163,7 +166,7 @@ class Memory:
         """
         raise KeyError(f"Miss at {address}")
 
-    def read(self, address: int, num_bytes : int = None, rotated : bool = False) -> int:
+    def read(self, address: int, num_bytes : int|None = None, rotated : bool = False) -> int:
         """
         Read a value from the memory at the specified address.
 
@@ -204,7 +207,7 @@ class Memory:
 
         return int.from_bytes(data, self.endianness)
 
-    def write(self, address: int, value: int, num_bytes : int = None, strobe : int = None, rotated : bool = False) -> None:
+    def write(self, address: int, value: int, num_bytes : int|None = None, strobe : int|None = None, rotated : bool = False) -> None:
         """
         Write a value to the memory at the specified address.
 
@@ -272,7 +275,7 @@ class Memory:
             if byte_en[idx]:
                 self.memory[address + i] = data[idx]
 
-    def export_to_file(self, filename: str, fmt : str = None) -> None:
+    def export_to_file(self, filename: str, fmt : str|None = None) -> None:
         """
         Export memory contents to a file.
 
@@ -369,7 +372,7 @@ class Memory:
             except Exception as e:
                 raise ValueError(f"Unsupported file format: {fmt}") from e
 
-    def import_from_file(self, filename: str, fmt : str = None) -> None:
+    def import_from_file(self, filename: str, fmt : str|None = None) -> None:
         """
         Load memory contents from a file.
 
@@ -437,7 +440,7 @@ class Memory:
 
             self.memory = dict(zip(df["addr"], df["data"], strict=False))
 
-        def bcopy(filename: str, fmt : str) -> None:
+        def bcopy(filename: str) -> None:
             """
             Import memory contents using bincopy.
             """
@@ -458,7 +461,7 @@ class Memory:
             pandas(filename, fmt=fmt)
         else:
             try:
-                bcopy(filename, fmt=fmt)
+                bcopy(filename)
             except Exception as e:
                 raise ValueError(f"Unsupported file format: {fmt}") from e
 

@@ -64,7 +64,7 @@ class Coverpoint(Component):
         self.at_least = at_least
 
 
-    def add_bin(self, name: str, *args: list[Any], **kwargs: list[Any]) -> None:
+    def add_bin(self, name: str, *args: Any, **kwargs: Any) -> None:
         """
         Add a bin to the AVL coverpoint.
 
@@ -96,7 +96,7 @@ class Coverpoint(Component):
         else:
             raise ValueError(f"Bin {name} does not exist")
 
-    def get_hit(self) -> Coverbin:
+    def get_hit(self) -> Coverbin|None:
         """
         Check if the variable matches any bin condition.
 
@@ -187,7 +187,7 @@ class Coverpoint(Component):
         """
 
         if full:
-            retval = None
+            retval = pd.DataFrame()
             for b in self._bins_.values():
                 if retval is None:
                     retval = b.report()

@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from cocotb.simtime import Steps, TimeUnitWithoutSteps
 from cocotb.triggers import Event
 from cocotb.utils import get_sim_time
 
@@ -46,7 +47,7 @@ class Transaction(Object):
         """
         return self._id_
 
-    def add_event(self, name: str, callback: Callable[..., Any] = None) -> None:
+    def add_event(self, name: str, callback: Callable[..., Any]|None = None) -> None:
         """
         Add an event to the transaction.
 
@@ -75,7 +76,7 @@ class Transaction(Object):
         else:
             return None
 
-    def set_event(self, name: str, *args: list[Any], **kwargs: list[Any]) -> None:
+    def set_event(self, name: str, unit: TimeUnitWithoutSteps|Steps = "ns",*args: Any, **kwargs: Any) -> None:
         """
         Set an event and trigger its callbacks.
 
@@ -84,16 +85,12 @@ class Transaction(Object):
         :param args: Additional arguments for the callback.
         :param kwargs: Additional keyword arguments for the callback.
         """
-        if "unit" in kwargs:
-            self._events_[name][0] = get_sim_time(unit=kwargs["unit"])
-        else:
-            self._events_[name][0] = get_sim_time(unit="ns")
-
+        self._events_[name][0] = get_sim_time(unit=unit)
         self._events_[name][1].set()
 
         for cb in self._events_[name][2]:
             if cb is not None:
-                cb(*args, **kwargs)
+                cb(self, *args, **kwargs)
 
     async def wait_on_event(self, name: str) -> None:
         """
