@@ -9,12 +9,13 @@ from typing import TYPE_CHECKING
 
 from .sequencer import Sequencer
 from .transaction import Transaction
+from .component import Component
 
 if TYPE_CHECKING:
     from .sequence import Sequence
 
 class SequenceItem(Transaction):
-    def __init__(self, name: str, parent: Sequencer|Sequence) -> None:
+    def __init__(self, name: str, parent: Sequencer|Sequence|Component|None) -> None:
         """
         Initializes the SequenceItem with a name and an optional parent component.
 
@@ -26,13 +27,16 @@ class SequenceItem(Transaction):
         self._parent_sequence_ = None
         self._parent_sequencer_ = None
 
+        parent_component = parent
+
         if isinstance(parent, SequenceItem):
             self._parent_sequence_ = parent
             self._parent_sequencer_ = parent.get_sequencer()
+            parent_component = self._parent_sequencer_
         elif isinstance(parent, Sequencer):
             self._parent_sequencer_ = parent
 
-        super().__init__(name, self._parent_sequencer_)
+        super().__init__(name, parent_component)
 
         self.add_event("done")
         self.add_event("response")
