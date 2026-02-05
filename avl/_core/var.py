@@ -265,6 +265,10 @@ class Var:
     def __repr__(self): return self._fmt_(self.value)
     def __str__(self): return self._fmt_(self.value)
 
+    def __format__(self, format_spec):
+        # Delegate formatting to the underlying int value
+        return format(self.value, format_spec)
+
     # Hashing
     def __hash__(self): return hash(self.value)
 
