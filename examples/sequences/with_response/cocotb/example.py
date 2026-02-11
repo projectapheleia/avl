@@ -54,7 +54,7 @@ class example_driver(avl.Driver):
             item.set_event("done")
             self.count += 1
 
-            item.set_event("response", ok=True)
+            item.set_event("response", item, ok=True)
 
     async def report_phase(self):
         if self.count != 5:
