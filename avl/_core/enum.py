@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-:from z3 import BitVec, Or
+from z3 import BitVec, Or
 
 from .logic import Logic
 
