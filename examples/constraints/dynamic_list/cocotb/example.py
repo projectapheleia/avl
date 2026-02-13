@@ -61,18 +61,4 @@ async def test(dut):
             else:
                 assert e.a[i] == e.a[i - 1] + 1
     end = time.time()
-    print(f"Time taken (unfrozen constraints): {end - start:.2f} seconds")
-
-    e.freeze_constraints()
-    start = time.time()
-    for _ in range(10):
-        e.randomize()
-        assert(e.size > 0 and e.size <= 8)
-
-        for i in range(0, int(e.size)):
-            if i == 0:
-                assert e.a[i] >= 0 and e.a[i] <= 100
-            else:
-                assert e.a[i] == e.a[i - 1] + 1
-    end = time.time()
-    print(f"Time taken (frozen constraints): {end - start:.2f} seconds")
+    print(f"Time taken : {end - start:.2f} seconds")

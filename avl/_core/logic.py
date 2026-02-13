@@ -3,12 +3,14 @@
 # Description:
 # Apheleia Verification Library Variable Class
 
+
 from __future__ import annotations
 
+import random
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVec
+from z3 import BitVec, Extract, Optimize
 
 from .var import Var
 
@@ -94,6 +96,23 @@ class Logic(Var):
         :rtype: z3.BitVecRef
         """
         return BitVec(f"{self._idx_}", self.width)
+
+    def _apply_constraints_(self, solver : Optimize) -> None:
+        """
+        Apply the constraints to the solver.
+
+        :param solver: The optimization solver to apply the constraints to.
+        :type solver: Optimize
+        :param add_randomization: Add constraints for randomization
+        :type add_randomization: bool
+        """
+
+        super()._apply_constraints_(solver)
+
+        # Add soft constraint randomizing each bit
+        for b in range(self.width):
+            bv = random.randint(0,1)
+            solver.add_soft(Extract(b,b,self._rand_) == bv, weight=100)
 
     def __getitem__(self, key):
         if isinstance(key, slice):
