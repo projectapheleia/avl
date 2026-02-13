@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import ArithRef, BitVecNumRef, BitVecRef, BoolRef, IntNumRef, Optimize, RatNumRef, sat
+from z3 import FP, BitVecNumRef, BoolRef, IntNumRef, Optimize, fpToIEEEBV, is_fp, sat
 
 
 class Var:
@@ -135,7 +135,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef | ArithRef | BitVecRef:
+    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | FP:
         """
         Return the Z3 representation of the variable.
 
@@ -353,7 +353,7 @@ class Var:
         """
         pass
 
-    def _apply_constraints(self, solver : Optimize) -> bool:
+    def _apply_constraints_(self, solver : Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -389,7 +389,7 @@ class Var:
 
         def new_solver():
             solver = Optimize()
-            self._apply_constraints(solver)
+            self._apply_constraints_(solver)
 
             return solver
 
@@ -397,12 +397,13 @@ class Var:
             if solver.check() == sat:
                 model = solver.model()
                 val = model.eval(obj.value() if hasattr(obj, "value") else obj, model_completion=True)
-                if isinstance(val, RatNumRef):
-                    cast_value = self._cast_(val.as_decimal(20).rstrip("?"))
+                if is_fp(val):
+                    bv = model.eval(fpToIEEEBV(val))
+                    cast_value = bv
                 elif isinstance(val, (IntNumRef | BitVecNumRef)):
-                    cast_value = self._cast_(val.as_long())
+                    cast_value = val.as_long()
                 else:
-                    cast_value = self._cast_(val)
+                    cast_value = val
             else:
                 raise Exception("Solver failed to randomize")
             return cast_value
@@ -424,25 +425,7 @@ class Var:
             for c in soft:
                 solver.add_soft(c(self._rand_), weight="1000")
 
-        # Calculate the range of the random variable
-        _range_ = []
         solver.push()
-        obj_max = solver.maximize(self._rand_)
-        _range_.append(cast(solver, obj_max))
-        solver.pop()
-        solver.push()
-        obj_min = solver.minimize(self._rand_)
-        _range_.append(cast(solver, obj_min))
-        solver.pop()
-
-        solver.push()
-        # Add in randomization
-        v = self._random_value_(bounds=(min(_range_), max(_range_)))
-        solver.add_soft(self._rand_ >= v, weight="100")
-        solver.add_soft(self._rand_ <= v, weight="100")
-
-        if random.choice([True, False]):
-            solver.add_soft(self._rand_ != self.value, weight="100")
 
         # Assign value
         self.value = cast(solver, self._rand_)

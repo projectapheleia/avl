@@ -8,12 +8,12 @@ import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-from z3 import ArithRef, Int, Or
+:from z3 import BitVec, Or
 
-from .var import Var
+from .logic import Logic
 
 
-class Enum(Var):
+class Enum(Logic):
 
     def __copy__(self):
         """
@@ -78,10 +78,7 @@ class Enum(Var):
         else:
             raise ValueError(f"Value {value} is not in the list of values {values}")
 
-        super().__init__(value, auto_random=auto_random, fmt=fmt)
-
-        # Define a width - in case use in Struct
-        self.width = max(values.values()).bit_length()
+        super().__init__(value, auto_random=auto_random, fmt=fmt, width=max(values.values()).bit_length())
 
     def _cast_(self, other: Any) -> Any:
         """
@@ -124,7 +121,7 @@ class Enum(Var):
         """
         return (min(self.values.values()), max(self.values.values()))
 
-    def _z3_(self) -> ArithRef:
+    def _z3_(self) -> BitVec:
         """
         Return the Z3 representation of the variable.
         :return: The Z3 representation of the variable.
@@ -135,7 +132,7 @@ class Enum(Var):
             lambda x: Or([x == v for v in self.values.values()]),
             hard=True,
         )
-        return Int(f"{self._idx_}")
+        return super()._z3_()
 
     # Type Conversions
     def __str__(self) -> str:

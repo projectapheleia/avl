@@ -88,36 +88,3 @@ Providing the following distribution:
 
 .. image:: /images/normal_distribution.png
    :align: center
-
-Freezing / Unfreezing constraints
----------------------------------
-
-By default variables to be randomized, constraints and ranges are re-calculated each time an object is randomized. This allows for uses to change constraints \
-and classes dynamically, unlike System Verilog.
-
-However, this can be slow for large classes with many variables and constraints. To speed up randomization, constraints can be frozen.
-This means the constraints are only calculated once, and then used for all future randomizations.
-
-To freeze constraints, the :any:`Object.freeze_constraints`  method can be used. This will freeze all constraints on the variable and \
-all constraints on the class that the variable is instanced in.
-
-To unfreeze constraints, the  :any:`Object.unfreeze_constraints` method can be used. This will unfreeze all constraints on the variable and \
-all constraints on the class that the variable is instanced in.
-
-An example of the benefit can be seen in the following example:
-
-.. literalinclude:: ../../../examples/constraints/dynamic_list/cocotb/example.py
-    :language: python
-
-.. code-block:: bash
-
-    Time taken (unfrozen constraints): 6.29 seconds
-    Time taken (frozen constraints): 0.95 seconds
-
-.. note::
-    When constraints are frozen, references to literals and other non-randomized variables are not updated (including those not within \
-    the scope of the randomization). This means that if the value of a literal changes, the constraint will not be updated. This is a \
-    trade-off for speed, and should be used with care.
-    Equally, new variables added to the class after the constraints are frozen will not be included in the randomization process.
-    If you need to update the value of a literal, you should unfreeze the constraints, update the value, and then freeze the constraints again.
-    This is not an issue for randomized variables, as they are always updated when the variable is randomized.

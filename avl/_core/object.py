@@ -6,17 +6,14 @@
 from __future__ import annotations
 
 import copy
-import os
-import random
 import warnings
 from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
-from z3 import BitVecNumRef, BoolRef, BV2Int, IntNumRef, Optimize, RatNumRef, sat
+from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, fpToIEEEBV, is_fp, sat
 
 from .factory import Factory
-from .int import Int
 from .log import Log
 from .struct import Struct
 from .var import Var
@@ -24,17 +21,7 @@ from .var import Var
 if TYPE_CHECKING:
     from .component import Component
 
-from itertools import islice
-
-# Batch size for constraint min / max calculations
-# Too big and the constraints won't solve
-# Too small and you get a performance drop
-if "AVL_CONSTRAINT_BATCH_SIZE" in os.environ:
-    CONSTRAINT_BATCH_SIZE = int(os.environ["AVL_CONSTRAINT_BATCH_SIZE"])
-else:
-    CONSTRAINT_BATCH_SIZE = None
-
-def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any], do_copy : bool=False, do_deepcopy : bool=False) -> Any:
+def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = None, do_copy : bool=False, do_deepcopy : bool=False) -> Any:
     """
     Recursively find and copy Var objects in the given object.
     This function handles lists, tuples, sets, and dictionaries, and can optionally perform deep copies.
@@ -204,7 +191,7 @@ class Object:
             # Handle keyword arguments
             name = kwargs.get('name')
             parent = kwargs.get('parent')
-        
+
         # Validate we have required parameters
         if name is None:
             raise TypeError(f"{cls.__name__} requires 'name' parameter")
@@ -242,8 +229,6 @@ class Object:
 
         # Randomness and constraints
         self._constraints_ = {True : {}, False: {}}
-        self._frozen_constraints_ = False
-        self._solver_ = None
 
         # Table format for string representation
         self._table_fmt_ = "grid"
@@ -602,22 +587,6 @@ class Object:
             if name in self._constraints_[t]:
                 del self._constraints_[t][name]
 
-    def freeze_constraints(self) -> None:
-        """
-        Freeze the constraints of the object, preventing further modifications.
-        This is useful to ensure that the constraints are not changed after they have been set.
-        Freeze will take effect when next randomization is called.
-        """
-        self._frozen_constraints_ = True
-
-    def unfreeze_constraints(self) -> None:
-        """
-        Unfreeze the constraints of the object, allowing modifications again.
-        This is useful to allow changes to the constraints after they have been frozen.
-        """
-        self._frozen_constraints_ = False
-        self._solver_ = None
-
     def pre_randomize(self) -> None:
         """
         Pre-randomization function.
@@ -648,7 +617,9 @@ class Object:
         :raises ValueError: If an unknown variable is encountered in the model.
         :raises Exception: If the solver fails to randomize the variable.
         """
-        def resolve_arg(a : Any, var_ids : list[int], constrained_vars : dict[int, Var]) -> Any:
+        def resolve_arg(a : Any) -> Any:
+            nonlocal var_ids, constrained_vars
+
             if not isinstance(a, Var):
                 return a
             elif not a._auto_random_ or a._idx_ not in var_ids:
@@ -657,17 +628,26 @@ class Object:
                 constrained_vars[a._idx_] = a
                 return a._rand_
 
-        def new_solver(constraints : dict[bool, dict], vars : list [Var], var_ids : list[int], constrained_vars : dict[int, Var]) -> Optimize:
+        def new_solver() -> Optimize:
+            nonlocal vars, constrained_vars
+
             solver = Optimize()
 
-            for truth_value, add_fn in [(True, solver.add), (False, lambda expr: solver.add_soft(expr, weight="100"))]:
-                for fn, args in constraints[truth_value].values():
-                    _args = [resolve_arg(a, var_ids, constrained_vars) for a in args]
+            # Apply class wide constraints
+            for truth_value, add_fn in [(True, solver.add),
+                                        (False, lambda expr: solver.add_soft(expr, weight=100))]:
+                for fn, args in self._constraints_[truth_value].values():
+                    _args = [resolve_arg(a) for a in args]
                     add_fn(fn(*_args))
 
+            # Find constraints local to variables
             for v in vars:
-                if v._apply_constraints(solver):
+                if any(v._constraints_.values()):
                     constrained_vars[v._idx_] = v
+
+            # Apply constraints local to variables
+            for v in constrained_vars.values():
+                v._apply_constraints_(solver)
 
             return solver
 
@@ -676,128 +656,78 @@ class Object:
             if solver.check() == sat:
                 model = solver.model()
                 for var in model.decls():
-                    v = Var._lookup_[int(var.name())]
-                    val = model.eval(var(), model_completion=True)
+                    try:
+                        v = Var._lookup_[int(var.name())]
+                    except Exception:
+                        continue
 
-                    if isinstance(val, RatNumRef):
-                        cast_values[v._idx_] = v._cast_(val.as_decimal(20).rstrip("?"))
-                    elif isinstance(val, IntNumRef| BitVecNumRef):
-                        cast_values[v._idx_] = v._cast_(val.as_long())
-                    else:
-                        cast_values[v._idx_] = v._cast_(val)
+                    if v is not None:
+                        val = model.eval(var(), model_completion=True)
+
+                        if is_fp(val):
+                            bv = model.eval(fpToIEEEBV(val))
+                            cast_values[v._idx_] = bv
+                        elif isinstance(val, IntNumRef| BitVecNumRef):
+                            cast_values[v._idx_] = val.as_long()
+                        else:
+                            cast_values[v._idx_] = val
             else:
                 raise Exception("Failed to randomize")
+
             return cast_values
-
-        def optimize(solver, fn, constrained_vars, values):
-            def batched(iterable, n):
-                it = iter(iterable)
-
-                if n is None:
-                    yield list(it)
-                    return
-
-                while True:
-                    batch = list(islice(it, n))
-                    if not batch:
-                        break
-                    yield batch
-
-            for batch in batched(list(constrained_vars.values()), CONSTRAINT_BATCH_SIZE):
-                solver.push()
-                for v in batch:
-                    if isinstance(v, Int):
-                        fn(BV2Int(v._rand_, is_signed=True))
-                    else:
-                        fn(v._rand_)
-                model = cast(solver)
-                for k, val in model.items():
-                    if k in constrained_vars:
-                        values[k] = val
-                solver.pop()
 
         # User defined pre-randomization function
         self.pre_randomize()
 
-        if not self._frozen_constraints_ or self._solver_ is None or hard is not None or soft is not None:
-            # Collect all Var objects in randomization
-            memo = {}
-            conversion = {}
-            vars = []
-            constrained_vars = {} # Dict to avoid multiple matching entries
+        # Collect all Var objects in randomization
+        memo = {}
+        conversion = {}
+        vars = []
+        constrained_vars = {} # Dict to avoid multiple matching entries
 
-            for key, value in self.__dict__.items():
-                if key != "_constraints_":
-                    _var_finder_(value, memo, conversion)
-            for v in conversion.values():
-                if Var._lookup_[v._idx_]._auto_random_:
-                    vars.append(Var._lookup_[v._idx_])
+        for key, value in self.__dict__.items():
+            if key != "_constraints_":
+                _var_finder_(value, memo, conversion)
 
-                    # Create the random / z3 variable
-                    # Done only when randomization is called to speed up non-randomized object creation
-                    if v._rand_ is None:
-                        v._rand_ = v._z3_()
+        for v in conversion.values():
+            if Var._lookup_[v._idx_]._auto_random_:
+                vars.append(Var._lookup_[v._idx_])
 
-            var_ids = [v._idx_ for v in vars]
+                # Create the random / z3 variable
+                # Done only when randomization is called to speed up non-randomized object creation
+                if v._rand_ is None:
+                    v._rand_ = v._z3_()
 
-            # Create Solver
-            solver = new_solver(constraints=self._constraints_, vars=vars, var_ids=var_ids, constrained_vars=constrained_vars)
+        var_ids = [v._idx_ for v in vars]
 
-            # Add dynamic constraints
-            if hard is not None:
-                for c in hard:
-                    fn, *args = c
-                    _args = [resolve_arg(a, var_ids, constrained_vars) for a in args]
-                    solver.add(fn(*_args))
+        # Create Solver
+        solver = new_solver()
 
-            if soft is not None:
-                for c in soft:
-                    fn, *args = c
-                    _args = [resolve_arg(a, var_ids, constrained_vars) for a in args]
-                    solver.add_soft(fn(*_args), weight="1000")
+        # Add dynamic constraints
+        if hard is not None:
+            for c in hard:
+                fn, *args = c
+                _args = [resolve_arg(a) for a in args]
+                solver.add(fn(*_args))
 
-            # Calculate min / max values of variables
-            max_values = {v._idx_: v.get_max() for v in vars}
-            optimize(solver=solver, fn=solver.maximize, constrained_vars=constrained_vars, values=max_values)
-
-            min_values = {v._idx_: v.get_min() for v in vars}
-            optimize(solver=solver, fn=solver.minimize, constrained_vars=constrained_vars, values=min_values)
-
-        else:
-            # Use existing solver and ranges
-            solver = self._solver_
-            min_values = self._min_values_
-            max_values = self._max_values_
-            vars = self._vars_
-            var_ids = self._var_ids_
+        if soft is not None:
+            for c in soft:
+                fn, *args = c
+                _args = [resolve_arg(a) for a in args]
+                solver.add_soft(fn(*_args), weight=1000)
 
         # Add randomization and solve
         solver.push()
-        for k,v in min_values.items():
-            var = Var._lookup_[k]
-            val = var._random_value_(bounds=(min(v, max_values[k]), max(v, max_values[k])))
-            solver.add_soft(var._rand_ >= val, weight="100")
-            solver.add_soft(var._rand_ <= val, weight="100")
-
-            if random.choice([True, False]):
-                solver.add_soft(var._rand_ != var.value, weight="100")
-
         values = cast(solver)
         solver.pop()
 
         # Assign values to Var objects - only for those within this class
-        for k, v in values.items():
+        for k in var_ids:
             var = Var._lookup_[k]
-            if var in vars:
-                var.value = v
-
-        # Save the solver and min/max values for future use
-        if self._frozen_constraints_ and self._solver_ is None and hard is None and soft is None:
-            self._solver_ = solver
-            self._min_values_ = min_values
-            self._max_values_ = max_values
-            self._vars_ = vars
-            self._var_ids_ = var_ids
+            if k in values:
+                var.value = values[k]
+            else:
+                var.value = var._random_value_()
 
         # User defined post-randomization function
         self.post_randomize()
