@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-from z3 import BitVec, Or
+:from z3 import BitVec, Or
 
 from .logic import Logic
 
@@ -62,6 +62,7 @@ class Enum(Logic):
             )
             self.__class__._deprecated_name_warning_ = False
 
+        assert len(args) == 2 or len(args) == 3, f"Unsupported number of args: {len(args)}"
         value = args[-2]
         values = args[-1]
 
@@ -147,8 +148,9 @@ class Enum(Logic):
         for k, v in self.values.items():
             if v == self.value:
                 return self._fmt_(k)
+        raise ValueError("Cannot represent enum value as it is unknown")
 
-    def _random_value_(self, bounds: tuple[Any, Any] = None) -> Any:
+    def _random_value_(self, bounds: tuple[Any, Any]|None = None) -> Any:
         """
         Randomize the value of the variable.
         """

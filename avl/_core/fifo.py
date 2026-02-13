@@ -3,7 +3,8 @@
 # Description:
 # Apheleia Verification Library List
 
-from typing import Any
+from collections.abc import Iterable
+from typing import Any, SupportsIndex
 
 from .list import List
 
@@ -32,7 +33,7 @@ class Fifo(List):
         if len(self) < self.depth:
             super().append(data)
 
-    def extend(self, iterable: list[Any]) -> None:
+    def extend(self, iterable: Iterable) -> None:
         """
         Extends the FIFO with elements from an iterable, ensuring it does not exceed its depth.
 
@@ -45,7 +46,7 @@ class Fifo(List):
             else:
                 break
 
-    def insert(self, index: int, data: Any) -> None:
+    def insert(self, index: SupportsIndex, data: Any) -> None:
         """
         Raises NotImplementedError as insertion at arbitrary positions is not supported.
 

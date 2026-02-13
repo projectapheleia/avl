@@ -21,7 +21,7 @@ FP32 = FPSort(8, 24)
 FP64 = FPSort(11, 53)
 
 class Fp16(Var):
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., float] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
 
@@ -36,7 +36,7 @@ class Fp16(Var):
         self._bits_ = np.uint16(0)
         self.width = 16
 
-    def _cast_(self, other: Any) -> Any:
+    def _cast_(self, other: Any) -> np.float16:
         """
         Cast the other value to the type of this variable's value.
 
@@ -55,7 +55,7 @@ class Fp16(Var):
 
             return np.float16(v)
 
-    def _range_(self) -> tuple[int, int]:
+    def _range_(self) -> tuple[float, float]:
         """
         Get the range of values that can be represented by this variable.
 
@@ -95,7 +95,7 @@ class Fp16(Var):
         solver.add(Not(fpIsInf(self._rand_)))
         solver.add(self._rand_ == fpBVToFP(bv, fp))
 
-    def _random_value_(self, bounds: tuple[float, float] = None) -> float:
+    def _random_value_(self, bounds: tuple[float, float]|None = None) -> np.float16:
         """
         Randomize the value of the variable.
 
@@ -128,21 +128,21 @@ class Fp16(Var):
         self.value = type(self._bits_)(int(raw)).view(type(self.value))
 
     # Bitwise
-    def __and__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __or__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __xor__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __lshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __rshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __iand__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __ior__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __ixor__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __ilshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __irshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __rand__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __ror__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __rxor__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __rlshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
-    def __rrshift__(self, other): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __and__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __or__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __xor__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __lshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __rshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __iand__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __ior__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __ixor__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __ilshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __irshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __rand__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __ror__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __rxor__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __rlshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
+    def __rrshift__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
 
     # Comparison - need to override to handle NaN and other cases
     def __eq__(self, other):
@@ -170,7 +170,7 @@ class Fp16(Var):
         return not (np.isnan(self.value) or np.isnan(other_val)) and self.value >= other_val
 
 class Fp32(Fp16):
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., float] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
 
@@ -181,7 +181,7 @@ class Fp32(Fp16):
         :param fmt: The format to be used, defaults to hex.
         :type fmt: function, optional
         """
-        super().__init__(*args, auto_random=auto_random)
+        super().__init__(*args, auto_random=auto_random, fmt=fmt)
         self._bits_ = np.uint32(0)
         self.width = 32
 
@@ -234,8 +234,7 @@ class Fp32(Fp16):
         solver.add(self._rand_ == fpBVToFP(bv, fp))
 
 class Fp64(Fp16):
-
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., float] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
 
@@ -246,7 +245,7 @@ class Fp64(Fp16):
         :param fmt: The format to be used, defaults to hex.
         :type fmt: function, optional
         """
-        super().__init__(*args, auto_random=auto_random)
+        super().__init__(*args, auto_random=auto_random, fmt=fmt)
         self._bits_ = np.uint64(0)
         self.width = 64
 
@@ -267,12 +266,12 @@ class Fp64(Fp16):
                 return np.frombuffer(struct.pack("Q", v.as_long()), dtype=np.float64)[0]
             return np.float64(v)
 
-    def _range_(self) -> tuple[int, int]:
+    def _range_(self) -> tuple[float, float]:
         """
         Get the range of values that can be represented by this variable.
 
         :return: A tuple containing the minimum and maximum values.
-        :rtype: tuple[int, int]
+        :rtype: tuple[float, float]
         """
         return (-1e100, 1e100) # Reduced to allow randomization
 

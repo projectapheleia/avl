@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import copy
 import warnings
-from collections.abc import MutableMapping, MutableSequence, Set
+from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
@@ -303,7 +303,7 @@ class Object:
           values = list(map(list, zip(*values, strict=False)))
         return tabulate.tabulate(values, headers=[], tablefmt=self._table_fmt_)
 
-    def set_name(self, name: str) -> str:
+    def set_name(self, name: str):
         """
         Set the name of the object.
 
@@ -333,7 +333,7 @@ class Object:
         else:
             return self.name
 
-    def set_parent(self, parent="Component") -> None:
+    def set_parent(self, parent: Component) -> None:
         """
         Set the parent of the component.
 
@@ -351,7 +351,7 @@ class Object:
         """
         return self._parent_
 
-    def set_field_attributes(self, name: str, fmt: str = str, compare: bool = True) -> None:
+    def set_field_attributes(self, name: str, fmt: Callable[..., str] = str, compare: bool = True) -> None:
         """
         Set attributes for a field.
 
@@ -384,7 +384,7 @@ class Object:
         """
         del self._field_attributes_[name]
 
-    def set_table_fmt(self, fmt: str = None, transpose : bool = None, recurse : bool = None) -> None:
+    def set_table_fmt(self, fmt: str|None = None, transpose : bool|None = None, recurse : bool|None = None) -> None:
         """
         Set the table format for string representation.
 
@@ -402,7 +402,7 @@ class Object:
         if recurse is not None:
             self._table_recurse_ = recurse
 
-    def debug(self, msg: str, group: str = None) -> None:
+    def debug(self, msg: str, group: str|None = None) -> None:
         """
         Logs a debug message.
 
@@ -415,7 +415,7 @@ class Object:
             group = self.get_full_name()
         Log.debug(msg, group)
 
-    def info(self, msg: str, group: str = None) -> None:
+    def info(self, msg: str, group: str|None = None) -> None:
         """
         Logs an info message.
 
@@ -428,7 +428,7 @@ class Object:
             group = self.get_full_name()
         Log.info(msg, group)
 
-    def warn(self, msg: str, group: str = None) -> None:
+    def warn(self, msg: str, group: str|None = None) -> None:
         """
         Logs a warning message.
 
@@ -441,7 +441,7 @@ class Object:
             group = self.get_full_name()
         Log.warn(msg, group)
 
-    def warning(self, msg: str, group: str = None) -> None:
+    def warning(self, msg: str, group: str|None = None) -> None:
         """
         Logs a warning message.
 
@@ -454,7 +454,7 @@ class Object:
             group = self.get_full_name()
         Log.warning(msg, group)
 
-    def error(self, msg: str, group: str = None) -> None:
+    def error(self, msg: str, group: str|None = None) -> None:
         """
         Logs an error message.
 
@@ -467,7 +467,7 @@ class Object:
             group = self.get_full_name()
         Log.error(msg, group)
 
-    def critical(self, msg: str, group: str = None) -> None:
+    def critical(self, msg: str, group: str|None = None) -> None:
         """
         Logs a critical message.
         Instantly stops the simulation by raising a SimFailure exception.
@@ -481,7 +481,7 @@ class Object:
             group = self.get_full_name()
         Log.critical(msg, group)
 
-    def fatal(self, msg: str, group: str = None) -> None:
+    def fatal(self, msg: str, group: str|None = None) -> None:
         """
         Logs a fatal message and raises a SimFailure exception.
         Instantly stops the simulation by raising a SimFailure exception.
@@ -544,7 +544,7 @@ class Object:
         return retVal
 
     def add_constraint(
-        self, name: str, constraint: BoolRef, *args: Any, hard: bool = True, target: dict = None
+        self, name: str, constraint: BoolRef, *args: Any, hard: bool = True, target: dict|None = None
     ) -> None:
         """
         Add a constraint to the object.
@@ -599,7 +599,7 @@ class Object:
         """
         pass
 
-    def randomize(self, hard: list[BoolRef] = None, soft: list[BoolRef] = None) -> None:
+    def randomize(self, hard: list[BoolRef]|None = None, soft: list[BoolRef]|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
         It uses an optimization solver to find a suitable value that satisfies the constraints.

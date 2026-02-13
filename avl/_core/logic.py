@@ -34,7 +34,7 @@ class Logic(Var):
         self,
         *args,
         auto_random: bool = True,
-        fmt: Callable[..., int] = hex,
+        fmt: Callable[..., str] = hex,
         width: int = 32
     ) -> None:
         """
@@ -88,7 +88,7 @@ class Logic(Var):
         """
         return (0, (1 << self.width) - 1)
 
-    def _z3_(self) -> BitVec:
+    def _z3_(self) -> BitVecRef:
         """
         Get the Z3 representation of the variable.
 
