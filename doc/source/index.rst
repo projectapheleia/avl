@@ -36,6 +36,7 @@ Additional Libraries / UVCs
 * `avl-apb <https://avl-apb.readthedocs.io/en/latest/>`_ - AMBA APB UVC for Apheleia Verification Library
 * `avl-axi-stream <https://avl-axi-stream.readthedocs.io/en/latest/>`_ - AMBA AXI-STREAM UVC for Apheleia Verification Library
 * `avl-axi <https://avl-axi.readthedocs.io/en/latest/>`_ - AMBA AXI5 UVC for Apheleia Verification Library
+* `avl-riscv-coverage <https://avl-riscv-coverage.readthedocs.io/en/latest/>`_ - RISC-V Coverage collection from trace framework
 
 Indices and tables
 ==================

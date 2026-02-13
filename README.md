@@ -121,6 +121,8 @@ ruff check . --fix
 |[avl-apb](https://github.com/projectapheleia/avl-apb)| AMBA APB UVC |
 |[avl-axi-stream](https://github.com/projectapheleia/avl-axi-stream)| AMBA AXI-STREAM UVC |
 |[avl-axi](https://github.com/projectapheleia/avl-axi)| AMBA AXI5 UVC |
+|[avl-riscv-coverage](https://github.com/projectapheleia/avl-riscv-coverage) | RISCV Coverage collection from trace framework |
+|[avl-tutorials](https://github.com/projectapheleia/avl-tutorials) | AVL Tutorials and introduction presentations |
 
 ## 📧 Contact
 

@@ -42,4 +42,5 @@ All Modules
    avl._core.var
    avl._core.visualization
    avl.templates._vanilla
+   avl.tools.coverage_analysis
    avl.tools.trace_analysis

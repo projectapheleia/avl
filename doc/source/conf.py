@@ -7,7 +7,7 @@ import sys
 from unittest import mock
 
 MOCK_MODULES = [
-    "cocotb", "cocotb.utils", "cocotb.simulator", "cocotb.triggers", "cocotb.clock",
+    "cocotb", "cocotb.utils", "cocotb.simulator", "cocotb.triggers", "cocotb.clock", "cocotb.simtime",
     "cocotb.handle", "cocotb.binary", "cocotb.decorators", "cocotb.result", "cocotb.regression"
 ]
 for mod_name in MOCK_MODULES:

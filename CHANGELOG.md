@@ -1,11 +1,14 @@
 # Changelog
 
+## [v0.5.0] - 2026-02-13
+
 ### Fixed
  - [#73](https://github.com/projectapheleia/avl/pull/73) Fix pyright lint errors
  - [#71](https://github.com/projectapheleia/avl/issues/71) Object(): kwargs (name, parent) break __new__
  - [#74](https://github.com/projectapheleia/avl/issues/74) Factory overrides carry over from one test to the other.
  - [#72](https://github.com/projectapheleia/avl/issues/72) Non-Uniform Randomization for Gap Constraints
  - [#75](https://github.com/projectapheleia/avl/issues/75) Randomization time increases faster than linear as avl.Var count increases
+
 ## [v0.4.3] - 2026-01-23
 
 ### Added
