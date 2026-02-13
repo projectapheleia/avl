@@ -9,7 +9,7 @@ import copy
 import os
 import random
 import warnings
-from collections.abc import MutableMapping, MutableSequence, Set
+from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
@@ -34,7 +34,7 @@ if "AVL_CONSTRAINT_BATCH_SIZE" in os.environ:
 else:
     CONSTRAINT_BATCH_SIZE = None
 
-def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = None, do_copy : bool=False, do_deepcopy : bool=False) -> Any:
+def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any], do_copy : bool=False, do_deepcopy : bool=False) -> Any:
     """
     Recursively find and copy Var objects in the given object.
     This function handles lists, tuples, sets, and dictionaries, and can optionally perform deep copies.
@@ -318,7 +318,7 @@ class Object:
           values = list(map(list, zip(*values, strict=False)))
         return tabulate.tabulate(values, headers=[], tablefmt=self._table_fmt_)
 
-    def set_name(self, name: str) -> str:
+    def set_name(self, name: str):
         """
         Set the name of the object.
 
@@ -348,7 +348,7 @@ class Object:
         else:
             return self.name
 
-    def set_parent(self, parent="Component") -> None:
+    def set_parent(self, parent: Component) -> None:
         """
         Set the parent of the component.
 
@@ -366,7 +366,7 @@ class Object:
         """
         return self._parent_
 
-    def set_field_attributes(self, name: str, fmt: str = str, compare: bool = True) -> None:
+    def set_field_attributes(self, name: str, fmt: Callable[..., str] = str, compare: bool = True) -> None:
         """
         Set attributes for a field.
 
@@ -399,7 +399,7 @@ class Object:
         """
         del self._field_attributes_[name]
 
-    def set_table_fmt(self, fmt: str = None, transpose : bool = None, recurse : bool = None) -> None:
+    def set_table_fmt(self, fmt: str|None = None, transpose : bool|None = None, recurse : bool|None = None) -> None:
         """
         Set the table format for string representation.
 
@@ -417,7 +417,7 @@ class Object:
         if recurse is not None:
             self._table_recurse_ = recurse
 
-    def debug(self, msg: str, group: str = None) -> None:
+    def debug(self, msg: str, group: str|None = None) -> None:
         """
         Logs a debug message.
 
@@ -430,7 +430,7 @@ class Object:
             group = self.get_full_name()
         Log.debug(msg, group)
 
-    def info(self, msg: str, group: str = None) -> None:
+    def info(self, msg: str, group: str|None = None) -> None:
         """
         Logs an info message.
 
@@ -443,7 +443,7 @@ class Object:
             group = self.get_full_name()
         Log.info(msg, group)
 
-    def warn(self, msg: str, group: str = None) -> None:
+    def warn(self, msg: str, group: str|None = None) -> None:
         """
         Logs a warning message.
 
@@ -456,7 +456,7 @@ class Object:
             group = self.get_full_name()
         Log.warn(msg, group)
 
-    def warning(self, msg: str, group: str = None) -> None:
+    def warning(self, msg: str, group: str|None = None) -> None:
         """
         Logs a warning message.
 
@@ -469,7 +469,7 @@ class Object:
             group = self.get_full_name()
         Log.warning(msg, group)
 
-    def error(self, msg: str, group: str = None) -> None:
+    def error(self, msg: str, group: str|None = None) -> None:
         """
         Logs an error message.
 
@@ -482,7 +482,7 @@ class Object:
             group = self.get_full_name()
         Log.error(msg, group)
 
-    def critical(self, msg: str, group: str = None) -> None:
+    def critical(self, msg: str, group: str|None = None) -> None:
         """
         Logs a critical message.
         Instantly stops the simulation by raising a SimFailure exception.
@@ -496,7 +496,7 @@ class Object:
             group = self.get_full_name()
         Log.critical(msg, group)
 
-    def fatal(self, msg: str, group: str = None) -> None:
+    def fatal(self, msg: str, group: str|None = None) -> None:
         """
         Logs a fatal message and raises a SimFailure exception.
         Instantly stops the simulation by raising a SimFailure exception.
@@ -559,7 +559,7 @@ class Object:
         return retVal
 
     def add_constraint(
-        self, name: str, constraint: BoolRef, *args: Any, hard: bool = True, target: dict = None
+        self, name: str, constraint: BoolRef, *args: Any, hard: bool = True, target: dict|None = None
     ) -> None:
         """
         Add a constraint to the object.
@@ -630,7 +630,7 @@ class Object:
         """
         pass
 
-    def randomize(self, hard: list[BoolRef] = None, soft: list[BoolRef] = None) -> None:
+    def randomize(self, hard: list[BoolRef]|None = None, soft: list[BoolRef]|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
         It uses an optimization solver to find a suitable value that satisfies the constraints.
@@ -660,7 +660,7 @@ class Object:
         def new_solver(constraints : dict[bool, dict], vars : list [Var], var_ids : list[int], constrained_vars : dict[int, Var]) -> Optimize:
             solver = Optimize()
 
-            for truth_value, add_fn in [(True, solver.add), (False, lambda expr: solver.add_soft(expr, weight=100))]:
+            for truth_value, add_fn in [(True, solver.add), (False, lambda expr: solver.add_soft(expr, weight="100"))]:
                 for fn, args in constraints[truth_value].values():
                     _args = [resolve_arg(a, var_ids, constrained_vars) for a in args]
                     add_fn(fn(*_args))
@@ -754,7 +754,7 @@ class Object:
                 for c in soft:
                     fn, *args = c
                     _args = [resolve_arg(a, var_ids, constrained_vars) for a in args]
-                    solver.add_soft(fn(*_args), weight=1000)
+                    solver.add_soft(fn(*_args), weight="1000")
 
             # Calculate min / max values of variables
             max_values = {v._idx_: v.get_max() for v in vars}
@@ -776,11 +776,11 @@ class Object:
         for k,v in min_values.items():
             var = Var._lookup_[k]
             val = var._random_value_(bounds=(min(v, max_values[k]), max(v, max_values[k])))
-            solver.add_soft(var._rand_ >= val, weight=100)
-            solver.add_soft(var._rand_ <= val, weight=100)
+            solver.add_soft(var._rand_ >= val, weight="100")
+            solver.add_soft(var._rand_ <= val, weight="100")
 
             if random.choice([True, False]):
-                solver.add_soft(var._rand_ != var.value, weight=100)
+                solver.add_soft(var._rand_ != var.value, weight="100")
 
         values = cast(solver)
         solver.pop()

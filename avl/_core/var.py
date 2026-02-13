@@ -11,7 +11,7 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, RatNumRef, sat
+from z3 import ArithRef, BitVecNumRef, BitVecRef, BoolRef, IntNumRef, Optimize, RatNumRef, sat
 
 
 class Var:
@@ -20,9 +20,9 @@ class Var:
     _lookup_ = weakref.WeakValueDictionary()
 
     @staticmethod
-    def _register_(cls : Var) -> None:
-        Var._lookup_[Var._count_] = cls
-        cls._idx_ = Var._count_
+    def _register_(new_var : Var) -> None:
+        Var._lookup_[Var._count_] = new_var
+        new_var._idx_ = Var._count_
         Var._count_ += 1
 
     def __copy__(self) -> Var:
@@ -51,7 +51,7 @@ class Var:
         memo[id(self)] = new_obj
         return new_obj
 
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., int] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
 
@@ -68,8 +68,10 @@ class Var:
                 stacklevel=2
             )
             self.__class__._deprecated_name_warning_ = False
+        assert len(args) == 1 or len(args) == 2, f"Unsupported number of args: {args}"
 
         # Lookup
+        self._idx_ = -1
         Var._register_(self)
 
         self.name = "**deprecated**"
@@ -133,7 +135,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef:
+    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | RatNumRef | ArithRef | BitVecRef:
         """
         Return the Z3 representation of the variable.
 
@@ -142,7 +144,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _z3_ method. Please override in subclass.")
 
-    def _random_value_(self, bounds: tuple[int, int] = None) -> Any:
+    def _random_value_(self, bounds: tuple[int, int]|None = None) -> Any:
         """
         Get a random value for the variable within the specified bounds.
 
@@ -291,7 +293,7 @@ class Var:
         return self._range_()[1]
 
     def add_constraint(
-        self, name: str, constraint: BoolRef, hard: bool = True, target: dict = None
+        self, name: str, constraint: BoolRef, hard: bool = True, target: dict|None = None
     ):
         """
         Add a constraint to the object.
@@ -351,7 +353,7 @@ class Var:
         """
         pass
 
-    def _apply_constraints(self, solver : Optimize) -> None:
+    def _apply_constraints(self, solver : Optimize) -> bool:
         """
         Apply the constraints to the solver.
 
@@ -362,11 +364,11 @@ class Var:
             solver.add(c(self._rand_))
 
         for c in self._constraints_[False].values():
-            solver.add_soft(c(self._rand_), weight=100)
+            solver.add_soft(c(self._rand_), weight="100")
 
         return any(self._constraints_.values())
 
-    def randomize(self, hard: bool = None, soft: bool = None) -> None:
+    def randomize(self, hard: list|None = None, soft: list|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
         It uses an optimization solver to find a suitable value that satisfies the constraints.
@@ -420,7 +422,7 @@ class Var:
                 solver.add(c(self._rand_))
         if soft is not None:
             for c in soft:
-                solver.add_soft(c(self._rand_), weight=1000)
+                solver.add_soft(c(self._rand_), weight="1000")
 
         # Calculate the range of the random variable
         _range_ = []
@@ -436,11 +438,11 @@ class Var:
         solver.push()
         # Add in randomization
         v = self._random_value_(bounds=(min(_range_), max(_range_)))
-        solver.add_soft(self._rand_ >= v, weight=100)
-        solver.add_soft(self._rand_ <= v, weight=100)
+        solver.add_soft(self._rand_ >= v, weight="100")
+        solver.add_soft(self._rand_ <= v, weight="100")
 
         if random.choice([True, False]):
-            solver.add_soft(self._rand_ != self.value, weight=100)
+            solver.add_soft(self._rand_ != self.value, weight="100")
 
         # Assign value
         self.value = cast(solver, self._rand_)
