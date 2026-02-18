@@ -95,6 +95,10 @@ make clean
 
 The examples use the [CocoTB Makefile](https://docs.cocotb.org/en/stable/building.html) and default to [Verilator](https://www.veripool.org/verilator/) with all waveforms generated. This can be modified using the standard CocoTB build system.
 
+>**WARNING**:
+>Due to [GNU Make not exporting variables not already in env](https://www.gnu.org/software/make/manual/make.html#Environment) the user must ensure PYTHONPATH is set in the environment.
+>If you have sourced the avl.sh this is done for you.
+
 ---
 
 
