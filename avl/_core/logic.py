@@ -10,7 +10,7 @@ import random
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVec, Extract, Optimize
+from z3 import BitVec, BitVecRef, Extract, Optimize
 
 from .var import Var
 

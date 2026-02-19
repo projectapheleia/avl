@@ -4,9 +4,9 @@
 # Apheleia attributes example
 
 
+import json
 import time
 from pprint import pp
-import json
 
 import avl
 import cocotb

@@ -6,12 +6,13 @@
 from __future__ import annotations
 
 import copy
+import os
 import warnings
 from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import tabulate
-from z3 import BitVecNumRef, BoolRef, IntNumRef, Optimize, fpToIEEEBV, is_fp, sat
+from z3 import BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
 
 from .factory import Factory
 from .log import Log
@@ -672,7 +673,27 @@ class Object:
                         else:
                             cast_values[v._idx_] = val
             else:
-                raise Exception("Failed to randomize")
+                msg = "Failed to randomize\n"
+                if os.environ.get("AVL_CONSTRAINT_DEBUG") is not None:
+                    s = Solver()
+                    assertions = list(solver.assertions())
+                    trackers = [Bool(f"p{i}") for i in range(len(assertions))]
+
+                    for t, c in zip(trackers, assertions, strict=True):
+                        s.assert_and_track(c, t)
+
+                    if s.check() != sat:
+                        core = s.unsat_core()
+                        for t in core:
+                            idx = int(str(t)[1:])
+                            constraint = assertions[idx]
+                            vars_in_constraint = z3util.get_vars(constraint)
+
+                            msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
+                            for v in vars_in_constraint:
+                                var = Var._lookup_[int(v.decl().name())]
+                                msg += f"\t\tVariable {v} == {var._varname_} ({var._file_}:{var._line_}\n"
+                raise Exception(msg)
 
             return cast_values
 

@@ -5,19 +5,22 @@
 
 from __future__ import annotations
 
+import inspect
+import os
 import random
 import warnings
 import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import FP, BitVecNumRef, BoolRef, IntNumRef, Optimize, fpToIEEEBV, is_fp, sat
+from z3 import FP, BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
 
 
 class Var:
     _deprecated_name_warning_ = True
     _count_ = 0
     _lookup_ = weakref.WeakValueDictionary()
+    _AVL_CONSTRAINT_DEBUG_ = os.environ.get("AVL_CONSTRAINT_DEBUG") is not None
 
     @staticmethod
     def _register_(new_var : Var) -> None:
@@ -51,6 +54,26 @@ class Var:
         memo[id(self)] = new_obj
         return new_obj
 
+    def _extract_varname_(self, code_context):
+        """Parse 'my_var = Var(42)' to extract 'my_var'."""
+        if code_context:
+            line = code_context[0].strip()
+            if '=' in line:
+                return line.split('=')[0].strip()
+        return None
+
+    def _extract_caller_frame_(self):
+        """Walk up the stack past any __init__ frames to find the real caller."""
+        for frame_info in inspect.stack():
+            # Skip frames that are __init__ methods (including super().__init__)
+            if frame_info.function == '__init__':
+                continue
+            # Skip frames from this file (internal)
+            if frame_info.filename == __file__:
+                continue
+            return frame_info
+        return None
+
     def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
         """
         Initialize an instance of the class.
@@ -82,6 +105,20 @@ class Var:
         # Randomness and constraints
         self._rand_ = None
         self._constraints_ = {True : {}, False: {}}
+
+        # Debug
+        self._file_ = None
+        self._line_ = None
+        self._varname_ = None
+
+        if Var._AVL_CONSTRAINT_DEBUG_:
+            frame = self._extract_caller_frame_()
+            if frame:
+                self._file_ = frame.filename
+                self._line_ = frame.lineno
+                self._varname_ = self._extract_varname_(frame.code_context)
+            else:
+                self._file_ = self._line_ = self._varname_ = None
 
         # z3 object creation removed
         # created as part of randomization to speed up non-randomized object creation
@@ -405,7 +442,28 @@ class Var:
                 else:
                     cast_value = val
             else:
-                raise Exception("Solver failed to randomize")
+                msg = "Failed to randomize\n"
+                if os.environ.get("AVL_CONSTRAINT_DEBUG") is not None:
+                    s = Solver()
+                    assertions = list(solver.assertions())
+                    trackers = [Bool(f"p{i}") for i in range(len(assertions))]
+
+                    for t, c in zip(trackers, assertions, strict=True):
+                        s.assert_and_track(c, t)
+
+                    if s.check() != sat:
+                        core = s.unsat_core()
+                        for t in core:
+                            idx = int(str(t)[1:])
+                            constraint = assertions[idx]
+                            vars_in_constraint = z3util.get_vars(constraint)
+
+                            msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
+                            for v in vars_in_constraint:
+                                var = Var._lookup_[int(v.decl().name())]
+                                msg += f"\t\tVariable {v} == {var._varname_} ({var._file_}:{var._line_}\n"
+
+                raise Exception(msg)
             return cast_value
 
         # Create rand / z3 variable

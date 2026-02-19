@@ -27,6 +27,7 @@ done
 popd 1>/dev/null
 
 # Default Simulation setup
+export AVL_CONSTRAINT_DEBUG=1
 export CXXFLAGS=${CXXFLAGS:--std=c++17}
 export PYTHONPATH=${PYTHONPATH}
 export SIM=${SIM:-verilator}

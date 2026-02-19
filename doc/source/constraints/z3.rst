@@ -88,3 +88,27 @@ Providing the following distribution:
 
 .. image:: /images/normal_distribution.png
    :align: center
+
+
+Debugging Unsatisfied Constraints
+---------------------------------
+
+If a constraint fails to be satisfied the user can enable debugging:
+
+.. code-block:: bash
+
+    export AVL_CONSTRAINT_DEBUG=1
+
+This enables variable tracking and details the conflicting constraints. This feature should not be enabled by default. There is a performance overhead \
+enabling the variable tracking, so it should only be used once an issue has been identified.
+
+.. code-block:: bash
+
+     0.00ns WARNING  cocotb.Test test0.test0            Failed to randomize
+                                                    	CONFLICTING CONSTRAINT: 1 == 100
+                                                    		Variable 1 == e ($HOME/avl/examples/constraints/conflict/cocotb/example.py:23
+                                                    	CONFLICTING CONSTRAINT: 1 == 200
+                                                    		Variable 1 == e (/$HOME/avl/examples/constraints/conflict/cocotb/example.py:23
+
+.. literalinclude:: ../../../examples/constraints/conflict/cocotb/example.py
+    :language: python

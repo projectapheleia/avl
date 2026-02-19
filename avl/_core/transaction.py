@@ -8,7 +8,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
-from cocotb.simtime import Steps, TimeUnitWithoutSteps
 from cocotb.triggers import Event
 from cocotb.utils import get_sim_time
 

@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .component import Component
 from .sequencer import Sequencer
 from .transaction import Transaction
-from .component import Component
 
 if TYPE_CHECKING:
     from .sequence import Sequence
