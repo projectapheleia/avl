@@ -33,6 +33,8 @@ Apheleia Verification Library Documentation
 Additional Libraries / UVCs
 ===========================
 
+* `avl-ral <https://avl-ral.readthedocs.io/en/latest/>`_ - Apheleia Verification Library - Register Abstraction Layer
+* `avl-qemu <https://avl-qemu.readthedocs.io/en/latest/>`_ - Apheleia Verification Library - QEMU Integration
 * `avl-apb <https://avl-apb.readthedocs.io/en/latest/>`_ - AMBA APB UVC for Apheleia Verification Library
 * `avl-axi-stream <https://avl-axi-stream.readthedocs.io/en/latest/>`_ - AMBA AXI-STREAM UVC for Apheleia Verification Library
 * `avl-axi <https://avl-axi.readthedocs.io/en/latest/>`_ - AMBA AXI5 UVC for Apheleia Verification Library

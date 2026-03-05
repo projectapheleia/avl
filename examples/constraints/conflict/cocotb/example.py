@@ -6,6 +6,7 @@
 
 import avl
 import cocotb
+import os
 
 
 class example_env(avl.Env):
@@ -20,11 +21,13 @@ class example_env(avl.Env):
 
 @cocotb.test(expect_error=Exception)
 async def test0(dut):
+    os.environ["AVL_CONSTRAINT_DEBUG"] = "1"
     e = example_env("env", None)
     e.randomize()
 
 @cocotb.test(expect_error=Exception)
 async def test1(dut):
+    os.environ["AVL_CONSTRAINT_DEBUG"] = "1"
     e = example_env("env", None)
     e.b.add_constraint("c_0", lambda x: x == 0x00)
     e.b.add_constraint("c_1", lambda x: x == 0x11)

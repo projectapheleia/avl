@@ -1,5 +1,8 @@
 # Changelog
 
+## [v0.5.1] - 2026-03-05
+
+### Added
  - [#80](https://github.com/projectapheleia/avl/issues/80) Constraint Debug: Add mechanism to help user debug unsatisfied constraints
 
 ## [v0.5.0] - 2026-02-13
