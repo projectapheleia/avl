@@ -164,14 +164,14 @@ class VanillaEnv(avl.Env):
 
         if self.srst is not None:
             cocotb.start_soon(
-                self.sync_reset(self.srst, self.cfg.sreset_cycles, active_high=self.cfg.sreset_high)
+                self.sync_reset(self.clk, self.srst, self.cfg.sreset_cycles, active_high=self.cfg.sreset_high)
             )
 
         if self.cfg.timeout_ns is not None:
             cocotb.start_soon(self.timeout(self.cfg.timeout_ns))
 
         if self.cfg.ticker_ns is not None:
-            cocotb.start_soon(self.ticker(self.cfd.ticker_ns, "Tempus Fugit"))
+            cocotb.start_soon(self.ticker(self.cfg.ticker_ns, "Tempus Fugit"))
 
 
 __all__ = [
