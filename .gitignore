@@ -29,6 +29,9 @@ results.xml
 *.vcd
 *.fsdb
 
+# vcs
+ucli.key
+
 .failed
 .passed
 *.log
