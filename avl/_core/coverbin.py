@@ -147,9 +147,14 @@ class Coverbin(Component):
         :rtype: float
         """
         if self.stats:
+            # Fewer than 2 samples has no defined sample variance/stddev.
+            if self._count_ <= 1:
+                return None
+
             variance = self.get_variance()
-            assert variance is not None
-            return sqrt(variance) if self._count_ > 1 else None
+            if variance is None:
+                return None
+            return sqrt(variance)
         else:
             return None
 
