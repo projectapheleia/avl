@@ -148,10 +148,9 @@ class Coverbin(Component):
         """
         if self.stats:
             variance = self.get_variance()
-            assert variance is not None
-            return sqrt(variance) if self._count_ > 1 else None
-        else:
-            return None
+            if variance is not None:
+                return sqrt(variance) if self._count_ > 1 else None
+        return None
 
     def report(self) -> pd.DataFrame:
         """

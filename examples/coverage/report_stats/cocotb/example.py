@@ -37,7 +37,7 @@ class example_env(avl.Env):
         for i in range(8):
             self.cg.clear()
 
-            for _ in range(random.randint(5, 10)):
+            for _ in range(random.choice([0, 1, random.randint(5, 10)])):
                 self.a = random.randint(0, 15)
                 self.b = random.randint(5, 19)
                 self.cg.sample()

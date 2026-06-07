@@ -2,6 +2,7 @@
 
 ## Fixed
  - [#82](https://github.com/projectapheleia/avl/issues/82) Vanilla Template : Issues with sync_reset and ticker
+ - [#88](https://github.com/projectapheleia/avl/issues/88) Coverbin(): getstddev asserts if _count_ <=1
 
 ## [v0.5.1] - 2026-03-05
 
