@@ -1,6 +1,6 @@
 [project]
 name = "avl-core"
-version = "0.5.1"
+version = "1.0.0"
 description = "Apheleia Verification Library. A set of Python base classes for efficient HDL verification."
 authors = [{name = "avl", email = "avl@projectapheleia.net"}]
 maintainers = [{name = "avl", email = "avl@projectapheleia.net"}]
@@ -9,7 +9,7 @@ license = {file = "LICENSE"}
 readme = "README.md"
 requires-python = ">=3.10"
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Programming Language :: Python"
 ]
 dependencies = [
