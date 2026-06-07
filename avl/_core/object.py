@@ -634,10 +634,16 @@ class Object:
 
             solver = Optimize()
 
+            def is_solver_var(a : Any) -> bool:
+                return isinstance(a, Var) and a._auto_random_ and a._idx_ in var_ids
+
             # Apply class wide constraints
             for truth_value, add_fn in [(True, solver.add),
                                         (False, lambda expr: solver.add_soft(expr, weight=100))]:
                 for fn, args in self._constraints_[truth_value].values():
+                    # Skip: no solver var → constraint may collapse to Python False → UNSAT.
+                    if not any(is_solver_var(a) for a in args):
+                        continue
                     _args = [resolve_arg(a) for a in args]
                     add_fn(fn(*_args))
 
