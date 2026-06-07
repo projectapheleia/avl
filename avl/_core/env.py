@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject, LogicObject
-from cocotb.simtime import Steps, TimeUnitWithoutSteps
+try:
+    from cocotb.simtime import TimeUnit
+except ImportError:
+    from cocotb.simtime import Steps, TimeUnitWithoutSteps
+    TimeUnit = TimeUnitWithoutSteps | Steps
 from cocotb.triggers import RisingEdge, Timer
 
 from .component import Component
@@ -46,7 +50,7 @@ class Env(Component):
         rst.value = int(not active_high)
 
     async def async_reset(
-        self, rst: HierarchyObject, duration: int, units: TimeUnitWithoutSteps|Steps = "ns", active_high: bool = True
+        self, rst: HierarchyObject, duration: int, units: TimeUnit = "ns", active_high: bool = True
     ) -> None:
         """
         Perform an asynchronous reset.
@@ -79,7 +83,7 @@ class Env(Component):
         clk.value = 0
         await Clock(clk, period_ps, "ps").start()
 
-    async def ticker(self, duration: int, msg: str, units: TimeUnitWithoutSteps|Steps = "ns") -> None:
+    async def ticker(self, duration: int, msg: str, units: TimeUnit = "ns") -> None:
         """
         Log a message at regular intervals.
 
@@ -94,7 +98,7 @@ class Env(Component):
             await Timer(duration, units)
             self.info(msg)
 
-    async def timeout(self, duration: int, units: TimeUnitWithoutSteps|Steps = "ns") -> None:
+    async def timeout(self, duration: int, units: TimeUnit = "ns") -> None:
         """
         Raise a timeout exception after a specified duration.
 
