@@ -7,6 +7,7 @@ from typing import Any
 
 from .component import Component
 from .scoreboard import Scoreboard
+from cocotb import start_soon
 
 
 class IndexedScoreboard(Scoreboard):
@@ -67,21 +68,38 @@ class IndexedScoreboard(Scoreboard):
         """
         raise NotImplementedError
 
+    async def _forward_before(self) -> None:
+        while True:
+            before_item = await self.before_port.blocking_pop()
+            self.scoreboards[self.get_index(before_item)].before_port.append(before_item)
+
+    async def _forward_after(self) -> None:
+        while True:
+            after_item = await self.after_port.blocking_pop()
+            self.scoreboards[self.get_index(after_item)].after_port.append(after_item)
+
     async def run_phase(self) -> None:
         """
-        Runs the scoreboard phase.
+        The idea here is very simple - indexed scoreboard isn't a scoreboard by itself,
+        but rather a filter that sends inputs into the right scoreboard.
+        For this reason, it doesn't follow the scoreboard's system of wait for before_item -> wait for after_item.
+        The moment it receives any item, it passes it to the correct scoreboard.
         """
-        while True:
-            self.before_item = await self.before_port.blocking_pop()
-            self.scoreboards[self.get_index(self.before_item)].before_port.append(self.before_item)
+        start_soon(self._forward_before())
+        start_soon(self._forward_after())
 
-            self.after_item = await self.after_port.blocking_pop()
-            self.scoreboards[self.get_index(self.after_item)].after_port.append(self.after_item)
+    async def report_phase(self) -> None:
+        """
+        Reports the results of the scoreboard.
+        compare_count part is removed, due to no comparisons being made here.
+        """
+        if len(self.before_port) + int(self.before_item is not None) > 0 or len(
+            self.after_port
+        ) + int(self.after_item is not None):
+            self.error(
+                f"Outstanding items: before_port={len(self.before_port) + int(self.before_item is not None)} after_port={len(self.after_port) + int(self.after_item is not None)}"
+            )
 
-            self.compare_count += 1
-
-            self.after_item = None
-            self.before_item = None
 
 
 __all__ = ["IndexedScoreboard"]
