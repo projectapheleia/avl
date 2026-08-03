@@ -82,6 +82,17 @@ class Component(Object):
             if fn is not None:
                 await fn(*args, **kwargs)
 
+    def get_parent(self) -> Component|None:
+        """
+        Get the parent of the component.
+
+        :return: Parent component.
+        :rtype: Component, optional
+        """
+        parent = super().get_parent()
+        assert parent is None or isinstance(parent, Component)
+        return parent
+
     def add_child(self, child: Component) -> None:
         """
         Add a child component.

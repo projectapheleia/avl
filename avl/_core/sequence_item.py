@@ -27,16 +27,13 @@ class SequenceItem(Transaction):
         self._parent_sequence_ = None
         self._parent_sequencer_ = None
 
-        parent_component = parent
-
         if isinstance(parent, SequenceItem):
             self._parent_sequence_ = parent
             self._parent_sequencer_ = parent.get_sequencer()
-            parent_component = self._parent_sequencer_
         elif isinstance(parent, Sequencer):
             self._parent_sequencer_ = parent
 
-        super().__init__(name, parent_component)
+        super().__init__(name, parent)
 
         self.add_event("done")
         self.add_event("response")
@@ -77,7 +74,7 @@ class SequenceItem(Transaction):
         """
         return self._parent_sequence_
 
-    def get_root_sequece(self) -> Sequence|None:
+    def get_root_sequence(self) -> Sequence|None:
         """
         Gets the root sequence of the item.
 
@@ -85,9 +82,8 @@ class SequenceItem(Transaction):
         :rtype: Sequence
         """
         retVal = self._parent_sequence_
-        while retVal is not None:
-            if retVal._parent_sequence_ is not None:
-                retVal = self._parent_sequence_
+        while retVal is not None and retVal._parent_sequence_ is not None:
+            retVal = retVal._parent_sequence_
         return retVal
 
 

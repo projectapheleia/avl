@@ -9,7 +9,7 @@ import copy
 import os
 import warnings
 from collections.abc import Callable, MutableMapping, MutableSequence, Set
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import Any, TypeVar
 
 import tabulate
 from z3 import BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
@@ -18,9 +18,6 @@ from .factory import Factory
 from .log import Log
 from .struct import Struct
 from .var import Var
-
-if TYPE_CHECKING:
-    from .component import Component
 
 def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = None, do_copy : bool=False, do_deepcopy : bool=False) -> Any:
     """
@@ -213,7 +210,7 @@ class Object:
 
         return obj
 
-    def __init__(self, name: str, parent: Component) -> None:
+    def __init__(self, name: str, parent: Object|None) -> None:
         """
         Initialize Object.
 
@@ -334,21 +331,21 @@ class Object:
         else:
             return self.name
 
-    def set_parent(self, parent: Component) -> None:
+    def set_parent(self, parent: Object|None) -> None:
         """
         Set the parent of the component.
 
         :param parent: Parent component.
-        :type parent: Component
+        :type parent: Object, optional
         """
         self._parent_ = parent
 
-    def get_parent(self) -> Component:
+    def get_parent(self) -> Object|None:
         """
         Get the parent of the component.
 
         :return: Parent component.
-        :rtype: Component
+        :rtype: Object, optional
         """
         return self._parent_
 
