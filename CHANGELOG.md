@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+ - avl-coverage-analysis: redesigned HTML report as a single self-contained page with AVL/Apheleia branded styling, a searchable hierarchy browser (tests/merged/ranked → covergroups), and a sortable/filterable/searchable covergroup and bin-detail table, replacing the old multi-page DataTables site. The stats scatter-plot popup is now an in-page modal instead of a separate linked file. No more jQuery/DataTables/Plotly CDN dependency, so reports work fully offline.
+ - avl-trace-analysis: matched the same branded, sortable/filterable/searchable table styling and dropped the jQuery/DataTables CDN dependency. Added friendlier errors for missing trace files, invalid `--query` expressions, and unknown `--sort` columns (previously raw Python tracebacks). `--sort` now supports descending order via a leading `-` (e.g. `--sort=-data`).
+
 # [v1.0.1] - 2026-08-03
 
 ## Fixed

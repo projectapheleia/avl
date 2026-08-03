@@ -3,6 +3,7 @@
 import argparse
 import os
 import shutil
+import json
 
 import pandas as pd
 import numpy as np
@@ -15,278 +16,1210 @@ logo = """
 </a>
 """
 
-html_code = """
-<html>
+REPORT_TEMPLATE = r"""<!DOCTYPE html>
+<html lang="en">
 <head>
-    <link rel="stylesheet"
-          href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css">
-    <link rel="stylesheet"
-          href="https://cdn.datatables.net/fixedheader/3.2.0/css/fixedHeader.dataTables.min.css">
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/fixedheader/3.2.0/js/dataTables.fixedHeader.min.js"></script>
-    <script>
-    $(document).ready(function() {{
+<meta charset="UTF-8">
+<title>AVL Coverage Report</title>
+<style>
+:root {
+  --navy: #0b2c52;
+  --navy-2: #123a6b;
+  --navy-3: #1b4a86;
+  --blue: #4a82c4;
+  --blue-bright: #5b93d8;
+  --blue-light: #cfe3ff;
+  --blue-pale: #eef4fc;
+  --grey: #838383;
+  --grey-dark: #45505c;
+  --bg: #eef1f5;
+  --panel: #ffffff;
+  --border: #dde3ea;
+  --text: #26313d;
+  --good: #2e8b57;
+  --good-bg: #e6f4ec;
+  --mid: #c98a1f;
+  --mid-bg: #fbf1de;
+  --bad: #c0392b;
+  --bad-bg: #fbe9e7;
+}
 
-        $('table').each(function() {{
-            var $table = $(this);
+* { box-sizing: border-box; }
 
-            // Clone header row for filters
-            $table.find('thead tr').clone(true).appendTo($table.find('thead'));
-            $table.find('thead tr:eq(1) th').each(function(i) {{
-                var title = $(this).text().trim();
-                $(this).html('<input type="text" placeholder="Filter ' + title + '" />');
-            }});
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
 
-            // Initialize DataTable
-            $table.DataTable({{
-                orderCellsTop: true,
-                fixedHeader: true
-            }});
-        }});
+body { display: flex; flex-direction: column; }
 
-        function toPlainText(htmlOrText) {{
-            return $('<div>').html(htmlOrText).text().trim();
-        }}
+.app-header {
+  flex: 0 0 auto;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.25rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 4px rgba(20, 30, 50, 0.06);
+  z-index: 20;
+}
 
-        function tryNumber(s) {{
-            if (s === null || s === undefined) return NaN;
-            s = String(s).replace(/[,\u00A0£$%]/g, '').trim();
-            if (s === '') return NaN;
-            var n = Number(s);
-            return isNaN(n) ? NaN : n;
-        }}
+.app-header .brand { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+.app-header .brand img { height: 34px; width: auto; display: block; }
+.app-header h1 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
-        // Custom filter logic
-        $.fn.dataTable.ext.search.push(function(settings, data, dataIndex) {{
-            var valid = true;
-            var $table = $(settings.nTable);
+.overall-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--blue-pale);
+  border: 1px solid var(--blue-light);
+  border-radius: 999px;
+  padding: 0.3rem 0.9rem 0.3rem 0.3rem;
+  font-size: 0.85rem;
+  color: var(--navy);
+  white-space: nowrap;
+}
+.overall-pill .overall-badge {
+  background: var(--navy);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.15rem 0.6rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
 
-            $table.find('thead tr:eq(1) th input').each(function(i) {{
-                var val = $(this).val();
-                if (!val) return;
-                val = val.trim();
+.app-body { flex: 1; min-height: 0; display: flex; }
 
-                var rawCell = data[i];
-                var cell = toPlainText(rawCell);
+.sidebar {
+  flex: 0 0 300px;
+  background: var(--navy);
+  color: #d9e4f5;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 
-                var m = val.match(/^([<>]=?|!=|=|\\^=|\\$=|~=)\\s*(.*)$/);
-                if (m) {{
-                    var op = m[1], rhs = m[2].trim();
+.sidebar-search { flex: 0 0 auto; padding: 0.85rem 0.85rem 0.5rem; }
+.sidebar-search input {
+  width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+.sidebar-search input::placeholder { color: rgba(255, 255, 255, 0.5); }
+.sidebar-search input:focus { border-color: var(--blue-bright); background: rgba(255, 255, 255, 0.13); }
 
-                    if (op === '=')  {{ valid = valid && (cell === rhs); return; }}
-                    if (op === '!=') {{ valid = valid && (cell !== rhs); return; }}
-                    if (op === '^=') {{ valid = valid && cell.startsWith(rhs); return; }}
-                    if (op === '$=') {{ valid = valid && cell.endsWith(rhs); return; }}
-                    if (op === '~=') {{
-                        try {{ valid = valid && (new RegExp(rhs)).test(cell); }}
-                        catch(e) {{ valid = false; }}
-                        return;
-                    }}
+.tree { flex: 1; min-height: 0; overflow: auto; padding: 0.25rem 0 1rem; }
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.32rem 0.6rem;
+  cursor: pointer;
+  border-radius: 4px;
+  margin: 0 0.4rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  user-select: none;
+}
+.tree-row:hover { background: rgba(255, 255, 255, 0.08); }
+.tree-row.active-scope { background: rgba(74, 130, 196, 0.35); color: #fff; }
+.tree-row.active { background: var(--blue); color: #fff; font-weight: 600; }
+.tree-caret {
+  width: 14px;
+  flex: 0 0 14px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.7rem;
+}
+.tree-caret.empty { visibility: hidden; }
+.tree-icon { width: 8px; flex: 0 0 8px; border-radius: 50%; }
+.tree-icon-root { background: var(--blue-bright); }
+.tree-icon-category { background: transparent; }
+.tree-icon-scope { background: var(--blue-light); }
+.tree-icon-covergroup { background: rgba(255, 255, 255, 0.35); }
+.tree-icon-ranked { background: #e8b84b; }
+.tree-label { overflow: hidden; text-overflow: ellipsis; }
+.tree-children.hidden { display: none; }
+.tree-node.tree-hidden { display: none; }
 
-                    var lhsNum = tryNumber(cell);
-                    var rhsNum = tryNumber(rhs);
-                    if (isNaN(lhsNum) || isNaN(rhsNum)) {{
-                        valid = false;
-                        return;
-                    }}
-                    if (op === '>')  valid = valid && (lhsNum > rhsNum);
-                    if (op === '>=') valid = valid && (lhsNum >= rhsNum);
-                    if (op === '<')  valid = valid && (lhsNum < rhsNum);
-                    if (op === '<=') valid = valid && (lhsNum <= rhsNum);
-                    return;
-                }}
+.content { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
-                if (cell.toLowerCase().indexOf(val.toLowerCase()) === -1) valid = false;
-            }});
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--panel);
+}
+.panel-top { flex: 0 0 45%; border-bottom: 1px solid var(--border); }
+.panel-bottom { flex: 1; }
 
-            return valid;
-        }});
+.panel-header {
+  flex: 0 0 auto;
+  padding: 0.6rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.panel-header h2 { font-size: 0.95rem; margin: 0; color: var(--navy); }
+.panel-header .panel-subtitle { font-size: 0.8rem; color: var(--grey); }
 
-        // Redraw when filters change
-        $(document).on('keyup change', 'table thead tr:eq(1) th input', function() {{
-            var table = $(this).closest('table').DataTable();
-            table.draw();
-        }});
+.divider {
+  flex: 0 0 6px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  cursor: row-resize;
+  position: relative;
+}
+.divider:hover, body.resizing .divider { background: var(--blue-light); }
 
-    }});
-    </script>
-    <style>
-        .logo {{
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            max-width: 150px;
-            height: auto;
-        }}
+.grid-host { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.grid-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1.1rem;
+}
+.grid-search {
+  flex: 0 0 260px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  outline: none;
+}
+.grid-search:focus { border-color: var(--blue); box-shadow: 0 0 0 2px var(--blue-pale); }
+.grid-count { font-size: 0.8rem; color: var(--grey); white-space: nowrap; }
 
-        .bar-bg {{
-            position: relative;
-            background: linear-gradient(to right, #4CAF50 var(--percentage), #f0f0f0 var(--percentage));
-            padding: 8px 12px;
-            border-radius: 4px;
-        }}
-    </style>
+.grid-scroll { flex: 1; min-height: 0; overflow: auto; padding: 0 1.1rem; }
+.grid-placeholder { padding: 1.5rem 1.1rem; color: var(--grey); font-size: 0.9rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--blue-pale);
+  color: var(--navy);
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  z-index: 1;
+}
+thead th.sortable { cursor: pointer; }
+thead th.sortable:hover { background: var(--blue-light); }
+tr.filter-row th {
+  padding: 0.3rem 0.4rem;
+  background: var(--panel);
+  top: 32px;
+}
+tr.filter-row input {
+  width: 100%;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+}
+tr.filter-row input:focus { border-color: var(--blue); }
+tbody td { padding: 0.42rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:nth-child(even) { background: rgba(74, 130, 196, 0.03); }
+tbody tr.clickable { cursor: pointer; }
+tbody tr.clickable:hover { background: var(--blue-pale); }
+tbody tr.selected { background: var(--blue-light) !important; box-shadow: inset 3px 0 0 var(--blue); }
+tbody tr.empty-row td { color: var(--grey); text-align: center; padding: 1.2rem; }
+
+.cov-bar {
+  --pct: 0%;
+  position: relative;
+  min-width: 90px;
+  height: 20px;
+  border-radius: 4px;
+  background: linear-gradient(to right, var(--bar-color, var(--bad)) var(--pct), #eef0f3 var(--pct));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.cov-good { --bar-color: var(--good); }
+.cov-mid { --bar-color: var(--mid); }
+.cov-bad { --bar-color: var(--bad); }
+a.stats-link { text-decoration: none; display: inline-block; }
+a.stats-link .cov-bar { cursor: pointer; box-shadow: 0 0 0 1px rgba(11, 44, 82, 0.15) inset; }
+a.stats-link:hover .cov-bar { box-shadow: 0 0 0 2px var(--navy) inset; }
+
+.badge {
+  display: inline-block;
+  background: var(--blue-pale);
+  border: 1px solid var(--blue-light);
+  color: var(--navy);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  font-size: 0.72rem;
+  margin: 1px 3px 1px 0;
+  white-space: nowrap;
+}
+
+.grid-pagination {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.8rem;
+  color: var(--grey-dark);
+}
+.grid-pagination button {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 5px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.grid-pagination button:disabled { opacity: 0.4; cursor: default; }
+.grid-pagination button:not(:disabled):hover { background: var(--blue-pale); }
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+.tree-row:focus-visible {
+  outline: 2px solid var(--blue-bright);
+  outline-offset: 1px;
+}
+.tree-row { outline-offset: -2px; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 20, 35, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal-overlay[hidden] { display: none; }
+.modal {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem 1.5rem;
+  min-width: 420px;
+  max-width: 90vw;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+.modal h3 { margin: 0 0 0.75rem; color: var(--navy); font-size: 1rem; }
+.modal-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  border: none;
+  background: none;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--grey);
+}
+.modal-close:hover { color: var(--bad); }
+.stats-svg { width: 100%; height: auto; max-width: 560px; display: block; }
+.curve-path { fill: none; stroke: var(--blue); stroke-width: 2; }
+.axis-line { stroke: var(--border); stroke-width: 1; }
+.mean-line { stroke: var(--navy); stroke-width: 1; stroke-dasharray: 4 3; }
+.axis-label { font-size: 10px; fill: var(--grey); }
+.mean-label { font-size: 10px; fill: var(--navy); font-weight: 600; }
+.stats-summary {
+  display: flex;
+  gap: 1.1rem;
+  margin-top: 0.6rem;
+  font-size: 0.8rem;
+  color: var(--grey-dark);
+  flex-wrap: wrap;
+}
+.stats-summary span { white-space: nowrap; }
+</style>
 </head>
 <body>
-    <div class="header">
-        {logo}
+  <header class="app-header">
+    <div class="brand">
+      __LOGO__
+      <h1>AVL Coverage Report</h1>
     </div>
+    <div class="overall-pill" id="overall-pill"></div>
+  </header>
+  <div class="app-body">
+    <aside class="sidebar">
+      <div class="sidebar-search">
+        <input type="search" id="tree-search" placeholder="Filter hierarchy...">
+      </div>
+      <div class="tree" id="tree"></div>
+    </aside>
+    <main class="content">
+      <section class="panel panel-top">
+        <div class="panel-header">
+          <h2 id="top-panel-title">Covergroups</h2>
+          <span class="panel-subtitle" id="top-panel-subtitle"></span>
+        </div>
+        <div class="grid-host" id="cg-grid"></div>
+      </section>
+      <div class="divider" id="divider"></div>
+      <section class="panel panel-bottom">
+        <div class="panel-header">
+          <h2 id="bottom-panel-title">Bin Detail</h2>
+          <span class="panel-subtitle" id="bottom-panel-subtitle"></span>
+        </div>
+        <div class="grid-host" id="bin-grid"></div>
+      </section>
+    </main>
+  </div>
 
-    <h2>{title}</h2>
-    {html_table}
+  <div class="modal-overlay" id="stats-modal" hidden>
+    <div class="modal">
+      <button class="modal-close" id="stats-modal-close">&times;</button>
+      <h3>Sample Distribution</h3>
+      <div id="stats-modal-body"></div>
+    </div>
+  </div>
+
+<script>
+const REPORT = __REPORT_JSON__;
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function numFmt(v) {
+  if (v === null || v === undefined) return "—";
+  var n = Number(v);
+  if (Number.isNaN(n)) return "—";
+  return Number.isInteger(n) ? String(n) : n.toFixed(3);
+}
+
+function tryNumber(s) {
+  if (s === null || s === undefined) return NaN;
+  s = String(s).replace(/[,\s%]/g, "").trim();
+  if (s === "") return NaN;
+  var n = Number(s);
+  return Number.isNaN(n) ? NaN : n;
+}
+
+function matchFilter(cellText, filterRaw) {
+  var val = filterRaw.trim();
+  if (!val) return true;
+  var cell = String(cellText);
+  var m = val.match(/^([<>]=?|!=|=|\^=|\$=|~=)\s*(.*)$/);
+  if (m) {
+    var op = m[1], rhs = m[2].trim();
+    if (op === "=") return cell === rhs;
+    if (op === "!=") return cell !== rhs;
+    if (op === "^=") return cell.toLowerCase().indexOf(rhs.toLowerCase()) === 0;
+    if (op === "$=") return cell.toLowerCase().slice(-rhs.length) === rhs.toLowerCase();
+    if (op === "~=") {
+      try { return new RegExp(rhs, "i").test(cell); } catch (e) { return false; }
+    }
+    var lhsNum = tryNumber(cell), rhsNum = tryNumber(rhs);
+    if (Number.isNaN(lhsNum) || Number.isNaN(rhsNum)) return false;
+    if (op === ">") return lhsNum > rhsNum;
+    if (op === ">=") return lhsNum >= rhsNum;
+    if (op === "<") return lhsNum < rhsNum;
+    if (op === "<=") return lhsNum <= rhsNum;
+  }
+  return cell.toLowerCase().indexOf(val.toLowerCase()) !== -1;
+}
+
+function coverageClass(pct) {
+  if (pct >= 90) return "cov-good";
+  if (pct >= 50) return "cov-mid";
+  return "cov-bad";
+}
+
+function coverageBar(pct, stats) {
+  pct = Number(pct) || 0;
+  var cls = coverageClass(pct);
+  var inner = '<div class="cov-bar ' + cls + '" style="--pct:' + Math.min(pct, 100) + '%">' +
+              "<span>" + pct.toFixed(1) + "%</span></div>";
+  if (stats) {
+    var data = escapeHtml(JSON.stringify(stats));
+    return '<a href="javascript:void(0)" class="stats-link" data-stats="' + data + '">' + inner + "</a>";
+  }
+  return inner;
+}
+
+/* ---------- Grid: sortable / filterable / searchable table ---------- */
+
+class Grid {
+  constructor(container, columns, rows, opts) {
+    this.container = container;
+    this.columns = columns;
+    this.rows = rows || [];
+    this.opts = opts || {};
+    this.sortKey = this.opts.defaultSortKey || null;
+    this.sortDir = this.opts.defaultSortDir || 1;
+    this.filters = {};
+    this.search = "";
+    this.page = 0;
+    this.pageSize = this.opts.pageSize || 12;
+    this._lastPageRows = [];
+    this.container.classList.add("grid-host");
+    this.render();
+  }
+
+  process() {
+    var rows = this.rows;
+    var self = this;
+
+    if (this.search) {
+      var q = this.search.toLowerCase();
+      rows = rows.filter(function (r) {
+        return self.columns.some(function (c) {
+          if (c.searchable === false) return false;
+          return String(r[c.key] === undefined || r[c.key] === null ? "" : r[c.key]).toLowerCase().indexOf(q) !== -1;
+        });
+      });
+    }
+
+    Object.keys(this.filters).forEach(function (key) {
+      var f = self.filters[key];
+      if (!f) return;
+      rows = rows.filter(function (r) {
+        return matchFilter(r[key] === undefined || r[key] === null ? "" : r[key], f);
+      });
+    });
+
+    if (this.sortKey) {
+      var col = this.columns.find(function (c) { return c.key === self.sortKey; });
+      var dir = this.sortDir;
+      rows = rows.slice().sort(function (a, b) {
+        var av = a[self.sortKey], bv = b[self.sortKey];
+        if (col && col.type === "number") {
+          av = Number(av); bv = Number(bv);
+          if (Number.isNaN(av)) av = -Infinity;
+          if (Number.isNaN(bv)) bv = -Infinity;
+          return (av - bv) * dir;
+        }
+        av = String(av === undefined || av === null ? "" : av);
+        bv = String(bv === undefined || bv === null ? "" : bv);
+        return av.localeCompare(bv, undefined, { numeric: true, sensitivity: "base" }) * dir;
+      });
+    }
+    return rows;
+  }
+
+  render() {
+    var self = this;
+    var active = document.activeElement;
+    var restore = null;
+    if (active && this.container.contains(active) && active.tagName === "INPUT") {
+      restore = {
+        isSearch: active.classList.contains("grid-search"),
+        key: active.dataset ? active.dataset.key : null,
+        start: active.selectionStart,
+        end: active.selectionEnd,
+      };
+    }
+
+    var rows = this.process();
+    var total = rows.length;
+    var paginate = this.opts.paginate !== false;
+    if (paginate) {
+      var maxPage = Math.max(0, Math.ceil(total / this.pageSize) - 1);
+      if (this.page > maxPage) this.page = maxPage;
+    }
+    var start = paginate ? this.page * this.pageSize : 0;
+    var pageRows = paginate ? rows.slice(start, start + this.pageSize) : rows;
+    this._lastPageRows = pageRows;
+
+    var html = "";
+    html += '<div class="grid-toolbar">';
+    html += '<input type="search" class="grid-search" placeholder="Search all columns..." value="' + escapeHtml(this.search) + '">';
+    html += '<span class="grid-count">' + (total === 0 ? "No rows" :
+      (start + 1) + "–" + Math.min(start + pageRows.length, total) + " of " + total) + "</span>";
+    html += "</div>";
+
+    html += '<div class="grid-scroll"><table><thead><tr>';
+    this.columns.forEach(function (col) {
+      var sortable = col.sortable !== false;
+      var arrow = self.sortKey === col.key ? (self.sortDir === 1 ? " ▲" : " ▼") : "";
+      html += '<th data-key="' + col.key + '" class="' + (sortable ? "sortable" : "") + '">' +
+        escapeHtml(col.label) + arrow + "</th>";
+    });
+    html += '</tr><tr class="filter-row">';
+    this.columns.forEach(function (col) {
+      if (col.filterable === false) { html += "<th></th>"; return; }
+      var v = self.filters[col.key] || "";
+      html += '<th><input type="text" data-key="' + col.key + '" placeholder="Filter" title="=, !=, >, >=, <, <=, ^=, $=, ~=" value="' + escapeHtml(v) + '"></th>';
+    });
+    html += "</tr></thead><tbody>";
+
+    if (pageRows.length === 0) {
+      html += '<tr class="empty-row"><td colspan="' + this.columns.length + '">' +
+        (this.opts.emptyMessage || "No matching rows") + "</td></tr>";
+    }
+    pageRows.forEach(function (row, idx) {
+      var selected = self.opts.isSelected && self.opts.isSelected(row) ? " selected" : "";
+      var clickable = self.opts.onRowClick ? " clickable" : "";
+      html += '<tr data-idx="' + idx + '" class="' + clickable + selected + '">';
+      self.columns.forEach(function (col) {
+        var content = col.render ? col.render(row) : escapeHtml(row[col.key] === undefined || row[col.key] === null ? "" : row[col.key]);
+        html += "<td>" + content + "</td>";
+      });
+      html += "</tr>";
+    });
+    html += "</tbody></table></div>";
+
+    if (paginate && total > this.pageSize) {
+      var pages = Math.ceil(total / this.pageSize);
+      html += '<div class="grid-pagination">';
+      html += '<button data-act="prev"' + (this.page <= 0 ? " disabled" : "") + ">Prev</button>";
+      html += "<span>Page " + (this.page + 1) + " of " + pages + "</span>";
+      html += '<button data-act="next"' + (this.page >= pages - 1 ? " disabled" : "") + ">Next</button>";
+      html += "</div>";
+    }
+
+    this.container.innerHTML = html;
+    this.attach();
+
+    if (restore) {
+      var el = restore.isSearch
+        ? this.container.querySelector(".grid-search")
+        : this.container.querySelector('.filter-row input[data-key="' + restore.key + '"]');
+      if (el) {
+        el.focus();
+        try { el.setSelectionRange(restore.start, restore.end); } catch (e) { /* ignore */ }
+      }
+    }
+  }
+
+  attach() {
+    var self = this;
+    var c = this.container;
+
+    var searchEl = c.querySelector(".grid-search");
+    if (searchEl) {
+      searchEl.addEventListener("input", function () {
+        self.search = searchEl.value;
+        self.page = 0;
+        self.render();
+      });
+    }
+
+    c.querySelectorAll(".filter-row input").forEach(function (inp) {
+      inp.addEventListener("input", function () {
+        self.filters[inp.dataset.key] = inp.value;
+        self.page = 0;
+        self.render();
+      });
+    });
+
+    var thead = c.querySelector("thead");
+    if (thead) {
+      thead.addEventListener("click", function (e) {
+        var th = e.target.closest("th[data-key]");
+        if (!th || !th.classList.contains("sortable")) return;
+        var key = th.dataset.key;
+        if (self.sortKey === key) self.sortDir *= -1;
+        else { self.sortKey = key; self.sortDir = 1; }
+        self.render();
+      });
+    }
+
+    var tbody = c.querySelector("tbody");
+    if (tbody && this.opts.onRowClick) {
+      tbody.addEventListener("click", function (e) {
+        var tr = e.target.closest("tr[data-idx]");
+        if (!tr) return;
+        var row = self._lastPageRows[Number(tr.dataset.idx)];
+        if (row) self.opts.onRowClick(row);
+      });
+    }
+
+    var pag = c.querySelector(".grid-pagination");
+    if (pag) {
+      pag.addEventListener("click", function (e) {
+        var btn = e.target.closest("button[data-act]");
+        if (!btn) return;
+        if (btn.dataset.act === "prev" && self.page > 0) self.page--;
+        if (btn.dataset.act === "next") self.page++;
+        self.render();
+      });
+    }
+  }
+}
+
+/* ---------- Column definitions ---------- */
+
+var COLUMNS_COVERGROUP = [
+  { key: "name", label: "Covergroup", type: "string" },
+  { key: "total", label: "Total Bins", type: "number" },
+  { key: "covered", label: "Covered Bins", type: "number" },
+  { key: "coverage", label: "Coverage", type: "number", render: function (r) { return coverageBar(r.coverage); } },
+];
+
+var COLUMNS_COVERGROUP_OVERVIEW = [
+  { key: "__sourceLabel", label: "Test", type: "string" },
+].concat(COLUMNS_COVERGROUP);
+
+var COLUMNS_RANKED = [
+  { key: "name", label: "Contributor", type: "string" },
+  { key: "score", label: "Score", type: "number" },
+  { key: "unique_rows", label: "Unique Bins", type: "number" },
+  { key: "rare_rows", label: "Rare Bins", type: "number" },
+  { key: "total_rows", label: "Total Bins", type: "number" },
+];
+
+var COLUMNS_BIN = [
+  { key: "name", label: "Name", type: "string" },
+  { key: "bin", label: "Bin", type: "string" },
+  { key: "at_least", label: "At Least", type: "number" },
+  { key: "count", label: "Count", type: "number" },
+  { key: "percentage", label: "Coverage", type: "number", render: function (r) { return coverageBar(r.percentage); } },
+];
+
+var COLUMNS_BIN_STATS = [
+  { key: "name", label: "Name", type: "string" },
+  { key: "bin", label: "Bin", type: "string" },
+  { key: "at_least", label: "At Least", type: "number" },
+  { key: "count", label: "Count", type: "number" },
+  { key: "min", label: "Min", type: "number", render: function (r) { return escapeHtml(numFmt(r.min)); } },
+  { key: "max", label: "Max", type: "number", render: function (r) { return escapeHtml(numFmt(r.max)); } },
+  { key: "mean", label: "Mean", type: "number", render: function (r) { return escapeHtml(numFmt(r.mean)); } },
+  { key: "stddev", label: "StdDev", type: "number", render: function (r) { return escapeHtml(numFmt(r.stddev)); } },
+  { key: "percentage", label: "Coverage", type: "number", render: function (r) {
+      return coverageBar(r.percentage, r.has_stats ? { min: r.min, max: r.max, mean: r.mean, stddev: r.stddev } : null);
+    } },
+];
+
+var COLUMNS_BIN_CONTRIB = [
+  { key: "name", label: "Name", type: "string" },
+  { key: "bin", label: "Bin", type: "string" },
+  { key: "contributor_count", label: "# Contributors", type: "number" },
+  { key: "contributor_display", label: "Contributors", type: "string", render: function (r) {
+      return r.contributor.map(function (c) { return '<span class="badge">' + escapeHtml(c) + "</span>"; }).join(" ");
+    } },
+];
+
+/* ---------- Build hierarchy from embedded REPORT data ---------- */
+
+var scopes = [];
+var nodeById = new Map();
+var nodeIndex = new Map();
+
+function makeNode(id, label, type, extra) {
+  var node = Object.assign({ id: id, label: label, type: type, children: [], expanded: false, __visible: true, parent: null }, extra || {});
+  nodeById.set(id, node);
+  return node;
+}
+
+function addChild(parent, child) {
+  child.parent = parent;
+  parent.children.push(child);
+}
+
+function makeScope(idPrefix, id, label, group, covergroups) {
+  var scope = { id: idPrefix + id, label: label, group: group, covergroups: covergroups };
+  scopes.push(scope);
+  covergroups.forEach(function (cg) {
+    cg.__scope = scope;
+    cg.__sourceLabel = label;
+    cg.__nodeId = scope.id + "::" + cg.name;
+  });
+  return scope;
+}
+
+function addScopeNode(parent, scope) {
+  var scopeNode = makeNode(scope.id, scope.label, "scope", { scope: scope });
+  addChild(parent, scopeNode);
+  scope.covergroups.forEach(function (cg) {
+    addChild(scopeNode, makeNode(cg.__nodeId, cg.name, "covergroup", { scope: scope, cg: cg }));
+  });
+  return scopeNode;
+}
+
+var treeRoot = makeNode("__root__", "All Tests", "root", { expanded: true });
+
+var testsCategory = makeNode("__tests__", "Tests", "category", { expanded: true });
+addChild(treeRoot, testsCategory);
+REPORT.tests.forEach(function (t) {
+  var scope = makeScope("test:", t.id, t.label, "tests", t.covergroups);
+  addScopeNode(testsCategory, scope);
+});
+
+if (REPORT.merged) {
+  var mergedScope = makeScope("merged:", REPORT.merged.id, REPORT.merged.label, "merged", REPORT.merged.covergroups);
+  addScopeNode(treeRoot, mergedScope);
+}
+
+if (REPORT.ranked || REPORT.contributors) {
+  var rankedCategory = makeNode("__ranked__", "Ranked", "category", { expanded: true });
+  addChild(treeRoot, rankedCategory);
+  if (REPORT.ranked) {
+    addChild(rankedCategory, makeNode("__ranked_scores__", "Ranked Coverage", "ranked", {}));
+  }
+  if (REPORT.contributors) {
+    var contribScope = makeScope("contrib:", REPORT.contributors.id, REPORT.contributors.label, "contributors", REPORT.contributors.covergroups);
+    addScopeNode(rankedCategory, contribScope);
+  }
+}
+
+var overviewRows = scopes.filter(function (s) { return s.group === "tests"; })
+  .reduce(function (acc, s) { return acc.concat(s.covergroups); }, []);
+
+/* ---------- Tree rendering ---------- */
+
+function computeVisibility(node, q) {
+  var selfMatch = !q || node.label.toLowerCase().indexOf(q) !== -1;
+  var anyChildMatch = false;
+  node.children.forEach(function (ch) {
+    if (computeVisibility(ch, q)) anyChildMatch = true;
+  });
+  node.__visible = selfMatch || anyChildMatch;
+  if (q && anyChildMatch) node.expanded = true;
+  return node.__visible;
+}
+
+function expandAncestors(id) {
+  var node = nodeById.get(id);
+  var changed = false;
+  while (node && node.parent) {
+    if (!node.parent.expanded) { node.parent.expanded = true; changed = true; }
+    node = node.parent;
+  }
+  return changed;
+}
+
+function renderTree() {
+  var treeEl = document.getElementById("tree");
+  nodeIndex.clear();
+  treeEl.innerHTML = "";
+  treeEl.appendChild(renderNode(treeRoot, 0));
+}
+
+function renderNode(node, depth) {
+  var wrapper = document.createElement("div");
+  wrapper.className = "tree-node";
+  if (!node.__visible) wrapper.classList.add("tree-hidden");
+
+  var hasChildren = node.children.length > 0;
+  var row = document.createElement("div");
+  row.className = "tree-row";
+  row.tabIndex = 0;
+  row.style.paddingLeft = (depth * 14 + 6) + "px";
+
+  var caret = document.createElement("span");
+  caret.className = "tree-caret" + (hasChildren ? "" : " empty");
+  caret.textContent = hasChildren ? (node.expanded ? "▾" : "▸") : "";
+  caret.addEventListener("click", function (e) {
+    e.stopPropagation();
+    node.expanded = !node.expanded;
+    renderTree();
+    updateTreeHighlight();
+  });
+  row.appendChild(caret);
+
+  var icon = document.createElement("span");
+  icon.className = "tree-icon tree-icon-" + node.type;
+  row.appendChild(icon);
+
+  var label = document.createElement("span");
+  label.className = "tree-label";
+  label.textContent = node.label;
+  row.appendChild(label);
+
+  row.addEventListener("click", function () { onTreeNodeClick(node); });
+  row.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onTreeNodeClick(node); }
+  });
+
+  wrapper.appendChild(row);
+  nodeIndex.set(node.id, { node: node, row: row });
+
+  if (hasChildren) {
+    var childrenWrap = document.createElement("div");
+    childrenWrap.className = "tree-children" + (node.expanded ? "" : " hidden");
+    node.children.forEach(function (ch) {
+      childrenWrap.appendChild(renderNode(ch, depth + 1));
+    });
+    wrapper.appendChild(childrenWrap);
+  }
+
+  return wrapper;
+}
+
+function updateTreeHighlight() {
+  nodeIndex.forEach(function (entry) {
+    entry.row.classList.remove("active", "active-scope");
+  });
+  if (currentView.kind === "root") {
+    var e = nodeIndex.get("__root__");
+    if (e) e.row.classList.add("active-scope");
+  } else if (currentView.kind === "ranked") {
+    var e2 = nodeIndex.get("__ranked_scores__");
+    if (e2) e2.row.classList.add("active-scope");
+  } else if (currentView.kind === "scope") {
+    var scopeEntry = nodeIndex.get(currentView.scope.id);
+    if (scopeEntry) scopeEntry.row.classList.add("active-scope");
+    if (currentCg) {
+      var cgEntry = nodeIndex.get(currentCg.__nodeId);
+      if (cgEntry) cgEntry.row.classList.add("active");
+    }
+  }
+}
+
+document.getElementById("tree-search").addEventListener("input", function (e) {
+  var q = e.target.value.trim().toLowerCase();
+  computeVisibility(treeRoot, q);
+  renderTree();
+  updateTreeHighlight();
+});
+
+/* ---------- Selection / view state ---------- */
+
+var currentView = { kind: "root" };
+var currentCg = null;
+var topGrid = null;
+var bottomGrid = null;
+
+function setPanelText(prefix, title, subtitle) {
+  document.getElementById(prefix + "-panel-title").textContent = title;
+  document.getElementById(prefix + "-panel-subtitle").textContent = subtitle || "";
+}
+
+function selectRoot() {
+  currentView = { kind: "root" };
+  currentCg = null;
+  refresh();
+}
+
+function selectScope(scope) {
+  currentView = { kind: "scope", scope: scope };
+  currentCg = null;
+  refresh();
+}
+
+function selectCovergroup(cg) {
+  currentView = { kind: "scope", scope: cg.__scope };
+  currentCg = cg;
+  if (expandAncestors(cg.__nodeId)) renderTree();
+  refresh();
+}
+
+function selectRanked() {
+  currentView = { kind: "ranked" };
+  currentCg = null;
+  refresh();
+}
+
+function onTreeNodeClick(node) {
+  if (node.type === "root") selectRoot();
+  else if (node.type === "category") { node.expanded = !node.expanded; renderTree(); updateTreeHighlight(); return; }
+  else if (node.type === "scope") selectScope(node.scope);
+  else if (node.type === "covergroup") selectCovergroup(node.cg);
+  else if (node.type === "ranked") selectRanked();
+}
+
+var topGridKey = null;
+
+function renderTopGrid() {
+  var el = document.getElementById("cg-grid");
+  var key, columns, rows, opts;
+
+  if (currentView.kind === "root") {
+    key = "root";
+    columns = COLUMNS_COVERGROUP_OVERVIEW;
+    rows = overviewRows;
+    opts = {
+      onRowClick: function (row) { selectCovergroup(row); },
+      isSelected: function (row) { return currentCg === row; },
+      emptyMessage: "No covergroups found",
+      pageSize: 15,
+    };
+    setPanelText("top", "All Covergroups", overviewRows.length + " covergroups across " + REPORT.tests.length + " tests");
+  } else if (currentView.kind === "ranked") {
+    key = "ranked";
+    columns = COLUMNS_RANKED;
+    rows = REPORT.ranked || [];
+    opts = { emptyMessage: "No ranked data", pageSize: 15, defaultSortKey: "score", defaultSortDir: -1 };
+    setPanelText("top", "Ranked Coverage", "Contribution score per test");
+  } else {
+    var scope = currentView.scope;
+    key = "scope:" + scope.id;
+    columns = COLUMNS_COVERGROUP;
+    rows = scope.covergroups;
+    opts = {
+      onRowClick: function (row) { selectCovergroup(row); },
+      isSelected: function (row) { return currentCg === row; },
+      emptyMessage: "No covergroups found",
+      pageSize: 15,
+    };
+    setPanelText("top", scope.label, scope.covergroups.length + " covergroups");
+  }
+
+  if (topGrid && topGridKey === key) {
+    /* Same dataset as before (only the selected row changed) - just refresh
+       the selection highlight without discarding the user's filter/sort/page state. */
+    topGrid.render();
+  } else {
+    topGrid = new Grid(el, columns, rows, opts);
+    topGridKey = key;
+  }
+}
+
+function renderBottomGrid() {
+  var el = document.getElementById("bin-grid");
+  if (!currentCg) {
+    el.innerHTML = '<div class="grid-placeholder">' +
+      (currentView.kind === "ranked"
+        ? "The ranked report has no per-bin detail view."
+        : "Select a covergroup above to see its bin detail.") +
+      "</div>";
+    setPanelText("bottom", "Bin Detail", "");
+    return;
+  }
+  var cg = currentCg;
+  setPanelText("bottom", cg.__scope.label + " / " + cg.name, cg.bins.length + " bins");
+  var columns = cg.kind === "contributors" ? COLUMNS_BIN_CONTRIB : (REPORT.stats ? COLUMNS_BIN_STATS : COLUMNS_BIN);
+  bottomGrid = new Grid(el, columns, cg.bins, { emptyMessage: "No bins", pageSize: 20 });
+}
+
+function refresh() {
+  renderTopGrid();
+  renderBottomGrid();
+  updateTreeHighlight();
+}
+
+/* ---------- Overall coverage pill ---------- */
+
+(function renderOverall() {
+  var o = REPORT.overall;
+  var pill = document.getElementById("overall-pill");
+  pill.innerHTML = "Overall coverage <span class=\"overall-badge\">" + o.coverage.toFixed(1) + "%</span>" +
+    ' <span style="color:var(--grey)">(' + o.covered + " / " + o.total + " bins)</span>";
+})();
+
+/* ---------- Resizable divider ---------- */
+
+(function setupDivider() {
+  var divider = document.getElementById("divider");
+  var dragging = false;
+  divider.addEventListener("mousedown", function () { dragging = true; document.body.classList.add("resizing"); });
+  window.addEventListener("mousemove", function (e) {
+    if (!dragging) return;
+    var content = document.querySelector(".content");
+    var rect = content.getBoundingClientRect();
+    var pct = (e.clientY - rect.top) / rect.height * 100;
+    pct = Math.min(80, Math.max(20, pct));
+    document.querySelector(".panel-top").style.flex = "0 0 " + pct + "%";
+  });
+  window.addEventListener("mouseup", function () { dragging = false; document.body.classList.remove("resizing"); });
+})();
+
+/* ---------- Stats modal ---------- */
+
+function buildNormalCurveSvg(s) {
+  var mean = Number(s.mean), stddev = Math.max(Number(s.stddev) || 0, 1e-6);
+  var rangeMin = Math.min(Number(s.min), mean - 4 * stddev);
+  var rangeMax = Math.max(Number(s.max), mean + 4 * stddev);
+  if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
+  var steps = 200;
+  var pts = [];
+  var peak = 0;
+  for (var i = 0; i <= steps; i++) {
+    var x = rangeMin + (rangeMax - rangeMin) * i / steps;
+    var y = (1 / (stddev * Math.sqrt(2 * Math.PI))) * Math.exp(-0.5 * Math.pow((x - mean) / stddev, 2));
+    pts.push([x, y]);
+    if (y > peak) peak = y;
+  }
+  var W = 560, H = 240, padL = 40, padB = 26, padT = 16, padR = 10;
+  var plotW = W - padL - padR, plotH = H - padT - padB;
+  function sx(x) { return padL + (x - rangeMin) / (rangeMax - rangeMin) * plotW; }
+  function sy(y) { return padT + plotH - (peak > 0 ? (y / peak) * plotH : 0); }
+  var path = pts.map(function (p, i) { return (i === 0 ? "M" : "L") + sx(p[0]).toFixed(2) + "," + sy(p[1]).toFixed(2); }).join(" ");
+  var meanX = sx(mean);
+  var axisY = padT + plotH;
+
+  return '<svg viewBox="0 0 ' + W + " " + H + '" class="stats-svg">' +
+    '<line x1="' + padL + '" y1="' + axisY + '" x2="' + (W - padR) + '" y2="' + axisY + '" class="axis-line"/>' +
+    '<path d="' + path + '" class="curve-path"/>' +
+    '<line x1="' + meanX + '" y1="' + padT + '" x2="' + meanX + '" y2="' + axisY + '" class="mean-line"/>' +
+    '<text x="' + padL + '" y="' + (H - 6) + '" class="axis-label">' + escapeHtml(numFmt(rangeMin)) + "</text>" +
+    '<text x="' + (W - padR) + '" y="' + (H - 6) + '" text-anchor="end" class="axis-label">' + escapeHtml(numFmt(rangeMax)) + "</text>" +
+    '<text x="' + meanX + '" y="' + (padT + 10) + '" text-anchor="middle" class="mean-label">μ=' + escapeHtml(numFmt(mean)) + "</text>" +
+    "</svg>" +
+    '<div class="stats-summary">' +
+    "<span>Min: " + escapeHtml(numFmt(s.min)) + "</span>" +
+    "<span>Max: " + escapeHtml(numFmt(s.max)) + "</span>" +
+    "<span>Mean: " + escapeHtml(numFmt(s.mean)) + "</span>" +
+    "<span>StdDev: " + escapeHtml(numFmt(s.stddev)) + "</span>" +
+    "</div>";
+}
+
+function openStatsModal(stats) {
+  document.getElementById("stats-modal-body").innerHTML = buildNormalCurveSvg(stats);
+  document.getElementById("stats-modal").hidden = false;
+}
+function closeStatsModal() { document.getElementById("stats-modal").hidden = true; }
+document.getElementById("stats-modal-close").addEventListener("click", closeStatsModal);
+document.getElementById("stats-modal").addEventListener("click", function (e) {
+  if (e.target.id === "stats-modal") closeStatsModal();
+});
+document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeStatsModal(); });
+document.addEventListener("click", function (e) {
+  var a = e.target.closest(".stats-link");
+  if (a) { e.preventDefault(); openStatsModal(JSON.parse(a.dataset.stats)); }
+});
+
+/* ---------- Init ---------- */
+
+computeVisibility(treeRoot, "");
+renderTree();
+refresh();
+</script>
 </body>
 </html>
 """
 
-plot_code = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Normal Distribution Plot</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-</head>
-<body>
-    <h2>Normal Distribution</h2>
-    <div id="plot" style="width: 800px; height: 500px;"></div>
-    <script>
-        function getParams() {
-            const params = {};
-            window.location.search.substring(1).split("&").forEach(pair => {
-                if (pair) {
-                    const [key, value] = pair.split("=");
-                    params[key] = parseFloat(decodeURIComponent(value));
-                }
-            });
-            return params;
+
+def _native(value):
+    """Convert numpy/pandas scalar types to plain Python types for JSON export."""
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        return None if np.isnan(value) else float(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+    return value
+
+
+def compute_group(group):
+    total_count = group["count"].sum()
+    return pd.Series({"count": total_count})
+
+
+def compute_group_stats(group):
+    total_count = group["count"].sum()
+    weighted_mean = (group["mean"] * group["count"]).sum() / total_count if total_count > 0.0 else 0.0
+    var_contrib = group["count"] * (group["variance"] + (group["mean"] - weighted_mean) ** 2) if total_count > 0.0 else 0.0
+    overall_variance = var_contrib.sum() / total_count if total_count > 0.0 else 0.0
+    overall_stddev = np.sqrt(overall_variance) if total_count > 0.0 else 0.0
+    minimum = group["min"].min()
+    maximum = group["max"].max()
+
+    return pd.Series({
+        "count": total_count,
+        "min": minimum,
+        "max": maximum,
+        "mean": weighted_mean,
+        "variance": overall_variance,
+        "stddev": overall_stddev,
+    })
+
+
+def make_bin_records(df, stats):
+    """Build the embedded per-bin records for a single covergroup's bin table."""
+    records = []
+    for row in df.to_dict("records"):
+        count = _native(row["count"])
+        at_least = _native(row["at_least"])
+        percentage = round(min((count / at_least) * 100, 100), 2)
+        record = {
+            "name": str(row["name"]),
+            "bin": str(row["bin"]),
+            "at_least": at_least,
+            "count": count,
+            "percentage": percentage,
         }
+        if stats:
+            minimum = _native(row.get("min"))
+            maximum = _native(row.get("max"))
+            has_stats = count >= 2 and not (minimum == maximum == 0.0)
+            record.update({
+                "min": minimum,
+                "max": maximum,
+                "mean": _native(row.get("mean")),
+                "variance": _native(row.get("variance")),
+                "stddev": _native(row.get("stddev")),
+                "has_stats": has_stats,
+            })
+        records.append(record)
+    return records
 
-        function normalPDF(x, mean, stddev) {
-            return (1 / (stddev * Math.sqrt(2 * Math.PI))) *
-                   Math.exp(-0.5 * Math.pow((x - mean) / stddev, 2));
-        }
 
-        let { min, max, mean, stddev } = getParams();
+def make_contributor_bin_records(df):
+    """Build the embedded per-bin records for a contributor (ranked) covergroup table."""
+    records = []
+    for row in df.to_dict("records"):
+        contributors = [str(c) for c in row["contributor"]]
+        records.append({
+            "name": str(row["name"]),
+            "bin": str(row["bin"]),
+            "contributor": contributors,
+            "contributor_display": ", ".join(contributors),
+            "contributor_count": len(contributors),
+        })
+    return records
 
-        if ([min, max, mean, stddev].some(v => isNaN(v))) {
-            document.getElementById("plot").innerHTML = "<b>Missing or invalid parameters in URL</b>";
-        } else {
-            // Handle edge cases
-            if (Math.abs(stddev) < 1e-8) {
-                stddev = 0.01;
-            }
 
-            // Expand range for plotting
-            const rangeMin = min - (Math.abs(min) * 0.1);
-            const rangeMax = max + (Math.abs(max) * 0.1);
-            const step = (rangeMax - rangeMin) / 200;
+def make_covergroup_entry(name, df, stats):
+    hit = df[df["count"] >= df["at_least"]]
+    total = int(len(df))
+    covered = int(len(hit))
+    coverage = round(min((covered / total) * 100, 100), 2)
+    return {
+        "name": str(name),
+        "total": total,
+        "covered": covered,
+        "coverage": coverage,
+        "kind": "bins",
+        "bins": make_bin_records(df, stats),
+    }
 
-            const x = [];
-            const y = [];
 
-            for (let v = rangeMin; v <= rangeMax; v += step) {
-                x.push(v);
-                y.push(normalPDF(v, mean, stddev));
-            }
+def make_contributor_covergroup_entry(name, df):
+    total = int(len(df))
+    return {
+        "name": str(name),
+        "total": total,
+        "covered": total,
+        "coverage": 100.0 if total else 0.0,
+        "kind": "contributors",
+        "bins": make_contributor_bin_records(df),
+    }
 
-            const trace = {
-                x: x,
-                y: y,
-                type: 'scatter',
-                mode: 'lines',
-                name: 'Normal PDF'
-            };
 
-            Plotly.newPlot('plot', [trace], {
-                title: 'Normal Distribution: μ=' + mean + ', σ=' + stddev,
-                xaxis: { title: 'Value' },
-                yaxis: { title: 'Probability Density' }
-            });
-        }
-    </script>
-</body>
-</html>
-"""
-def create_stats_link(row):
-    if "min" not in row or row["count"] < 2 or (row["min"] == row["max"] == 0.0):
-       return f'<div class="bar-bg" style="--percentage: {row["percentage"]}%;">{row["percentage"]}%</div>'
-    else:
-      return f'<div class="bar-bg" style="--percentage: {row["percentage"]}%;"><a href="stats.html?min={row["min"]}&max={row["max"]}&mean={row["mean"]}&stddev={row["stddev"]}">{row["percentage"]}%</a></div>'
+def make_scope(cg_tables, stats):
+    return [make_covergroup_entry(cg, df.reset_index(drop=True), stats) for cg, df in cg_tables.items()]
 
-def summary_table(df):
-    index_data = pd.DataFrame({"name": [], "total bins": [], "covered bins": [], "coverage": []})
-    for k, v in df.items():
-        # Sub-frame only of hit bins
-        hit = v[v["count"] >= v["at_least"]]
-        name = k.replace(".json", "")
-        fname = f'<a href="./{name}/coverage.html">{name}</a>'
-        total = len(v["bin"])
-        covered = len(hit["bin"])
-        coverage = np.round(np.minimum((covered / total ) * 100, 100), 2)
-        t_pd = pd.DataFrame(
-            {
-                "name": [fname],
-                "total bins": [total],
-                "covered bins": [covered],
-                "coverage": [coverage],
-            }
-        )
-        index_data = pd.concat([index_data, t_pd], ignore_index=True)
 
-    # Convert coverage to bar chart
-    index_data["coverage"] = index_data["coverage"].apply(lambda x: f'<div class="bar-bg" style="--percentage: {x}%;">{x}%</div>')
+def make_contributor_scope(cg_tables):
+    return [make_contributor_covergroup_entry(cg, df.reset_index(drop=True)) for cg, df in cg_tables.items()]
 
-    # Create a summary table
-    html_table = index_data.to_html(
-        classes="display", index=False, table_id="myTable", escape=False
-    )
-    return html_table
-
-def index_and_detail_tables(df, root, directory):
-    # Generate an index table with links to sub-tables containing the details
-
-    os.makedirs(directory, exist_ok=True)
-    index_data = pd.DataFrame({"name": [], "total bins": [], "covered bins": [], "coverage": []})
-    for k, v in df.items():
-        # Create the details page
-        d = os.path.join(directory,k)
-        os.makedirs(d, exist_ok=True)
-
-        title = f"Coverage Details : {k}"
-        html_table = v.to_html(classes="display", index=False, table_id="myTable", escape=False)
-
-        # Save to HTML file
-        with open(os.path.join(d, "details.html"), "w", encoding="utf-8") as html_file:
-            html_file.write(html_code.format(logo=logo, title=title, html_table=html_table))
-        # Softlink for stats
-        os.symlink(os.path.join(os.path.abspath(root), "stats.html"), os.path.join(d, "stats.html"))
-
-        # Sub-frame only of hit bins
-        hit = v[v["count"] >= v["at_least"]]
-        name = k.replace(".json", "")
-        fname = f'<a href="./{name}/details.html">{name}</a>'
-        total = len(v["bin"])
-        covered = len(hit["bin"])
-        coverage = np.round(np.minimum((covered / total ) * 100, 100), 2)
-        t_pd = pd.DataFrame(
-            {
-                "name": [fname],
-                "total bins": [total],
-                "covered bins": [covered],
-                "coverage": [coverage],
-            }
-        )
-        index_data = pd.concat([index_data, t_pd], ignore_index=True)
-
-    # Convert coverage to bar chart
-    index_data["coverage"] = index_data["coverage"].apply(lambda x: f'<div class="bar-bg" style="--percentage: {x}%;">{x}%</div>')
-
-    # Create a summary table
-    html_table = index_data.to_html(classes="display", index=False, table_id="myTable", escape=False)
-
-    with open(os.path.join(directory, "index.html"), "w", encoding="utf-8") as html_file:
-        html_file.write(html_code.format(logo=logo, title=f"Coverage Summary : {os.path.basename(directory)}", html_table=html_table))
 
 def main():
     parser = argparse.ArgumentParser(description="Generate HTML report from JSON coverage data.")
@@ -312,9 +1245,7 @@ def main():
     print(f"Creating new HTML directory: {args.output}")
     os.makedirs(args.output, exist_ok=True)
 
-    if args.stats:
-      with open(os.path.join(args.output, "stats.html"), "w", encoding="utf-8") as html_file:
-        html_file.write(plot_code)
+    report = {"stats": args.stats, "tests": [], "merged": None, "contributors": None, "ranked": None}
 
     # Read JSON files into DataFrames
     tables = {}
@@ -327,126 +1258,53 @@ def main():
 
         if args.stats:
             for col in ["min", "max", "mean", "variance", "stddev"]:
-              if col not in tables[f].columns:
-                tables[f][col] = 0.0
-              else:
-                tables[f][col] = tables[f][col].fillna(0.0)
-
+                if col not in tables[f].columns:
+                    tables[f][col] = 0.0
+                else:
+                    tables[f][col] = tables[f][col].fillna(0.0)
         else:
             try:
-              tables[f].drop(columns=["min", "max", "mean", "variance", "stddev"], inplace=True)
-            except:
-              pass
+                tables[f].drop(columns=["min", "max", "mean", "variance", "stddev"], inplace=True)
+            except KeyError:
+                pass
 
-        # Add in percentage bar-chart
-        tables[f]["percentage"] = np.round(np.minimum((tables[f]["count"] / tables[f]["at_least"]) * 100, 100), 2)
-
-        # Add link to plot of stats
-        tables[f]["percentage"] = tables[f].apply(create_stats_link, axis=1)
-
-        # Convert to HTML with table ID
-        cg_tables = {cg: g.drop(columns="covergroup").reset_index(drop=True) for cg, g in tables[f].groupby("covergroup")}
-        index_and_detail_tables(cg_tables, os.path.abspath(args.output), os.path.join(args.output, f.replace(".json", "")))
-
-    # Generate index.html
-    index_data = pd.DataFrame({"name": [], "total bins": [], "covered bins": [], "coverage": []})
-    for k, v in tables.items():
-        # Sub-frame only of hit bins
-        hit = v[v["count"] >= v["at_least"]]
-        name = k.replace(".json", "")
-        fname = f'<a href="./{name}/index.html">{name}</a>'
-        total = len(v["bin"])
-        covered = len(hit["bin"])
-        coverage = np.round(np.minimum((covered / total ) * 100, 100), 2)
-        t_pd = pd.DataFrame(
-            {
-                "name": [fname],
-                "total bins": [total],
-                "covered bins": [covered],
-                "coverage": [coverage],
-            }
-        )
-        index_data = pd.concat([index_data, t_pd], ignore_index=True)
-
-    # Convert coverage to bar chart
-    index_data["coverage"] = index_data["coverage"].apply(lambda x: f'<div class="bar-bg" style="--percentage: {x}%;">{x}%</div>')
-
-    # Create a summary table
-    html_table = index_data.to_html(
-        classes="display", index=False, table_id="myTable", escape=False
-    )
+        name = f.replace(".json", "")
+        cg_tables = {
+            cg: g.drop(columns="covergroup").reset_index(drop=True)
+            for cg, g in tables[f].groupby("covergroup")
+        }
+        report["tests"].append({
+            "id": name,
+            "label": name,
+            "covergroups": make_scope(cg_tables, args.stats),
+        })
 
     # Generate merged coverage if requested
     if args.merge:
-        def compute_group(group):
-          total_count = group["count"].sum()
-          return pd.Series({"count": total_count})
-
-        def compute_group_stats(group):
-          total_count = group["count"].sum()
-          weighted_mean = (group["mean"] * group["count"]).sum() / total_count if total_count > 0.0 else 0.0
-          var_contrib = group["count"] * (group["variance"] + (group["mean"] - weighted_mean) ** 2) if total_count > 0.0 else 0.0
-          overall_variance = var_contrib.sum() / total_count if total_count > 0.0 else 0.0
-          overall_stddev = np.sqrt(overall_variance) if total_count > 0.0 else 0.0
-          minimum = group["min"].min()
-          maximum = group["max"].max()
-
-          return pd.Series({
-                            "count": total_count,
-                            "min" : minimum,
-                            "max" : maximum,
-                            "mean": weighted_mean,
-                            "variance": overall_variance,
-                            "stddev": overall_stddev,
-          })
-
         print("Generating merged coverage report")
         merged_data = pd.concat(tables.values(), ignore_index=True)
         if args.stats:
-          merged_data = merged_data.groupby(["covergroup", "name", "bin", "at_least"], as_index=False).apply(compute_group_stats, include_groups=False)
+            merged_data = merged_data.groupby(
+                ["covergroup", "name", "bin", "at_least"], as_index=False
+            ).apply(compute_group_stats, include_groups=False)
         else:
-          merged_data = merged_data.groupby(["covergroup", "name", "bin", "at_least"], as_index=False).apply(compute_group, include_groups=False)
+            merged_data = merged_data.groupby(
+                ["covergroup", "name", "bin", "at_least"], as_index=False
+            ).apply(compute_group, include_groups=False)
 
-       # Add in percentage bar-chart
-        merged_data["percentage"] = np.round(np.minimum((merged_data["count"] / merged_data["at_least"]) * 100, 100), 2)
-
-        # Add link to plot of stats
-        merged_data["percentage"] = merged_data.apply(create_stats_link, axis=1)
-
-        # Create the report
-        cg_tables = {cg: g.drop(columns="covergroup").reset_index(drop=True) for cg, g in merged_data.groupby("covergroup")}
-        index_and_detail_tables(cg_tables, os.path.abspath(args.output), os.path.join(args.output, "merged"))
-
-        # Add merged coverage to index.html
-        t_pd = pd.DataFrame(
-            {
-                "name": ['<a href="./merged/index.html">Merged Coverage</a>'],
-                "total bins": [len(merged_data["bin"])],
-                "covered bins": [
-                    len(merged_data[merged_data["count"] >= merged_data["at_least"]]["bin"])
-                ],
-                "coverage": [
-                    np.round(
-                        np.minimum(
-                           len(merged_data[merged_data["count"] >= merged_data["at_least"]]["bin"]) / len(merged_data["bin"]) * 100, 100
-                        ),
-                    2)
-                ],
-            }
-        )
-        t_pd["coverage"] = t_pd["coverage"].apply(lambda x: f'<div class="bar-bg" style="--percentage: {x}%;">{x}%</div>')
-
-        html_table += f"""
-
-<h2>Merged Coverage Report</h2>
-{t_pd.to_html(classes="display", index=False, table_id="mergedTable", escape=False)}
-
-        """
+        cg_tables = {
+            cg: g.drop(columns="covergroup").reset_index(drop=True)
+            for cg, g in merged_data.groupby("covergroup")
+        }
+        report["merged"] = {
+            "id": "merged",
+            "label": "Merged Coverage",
+            "covergroups": make_scope(cg_tables, args.stats),
+        }
 
     # Generate ranked coverage if requested
     if args.rank:
         print("Generating ranked coverage report")
-        filtered = {}
         ranked = pd.DataFrame({"covergroup": [], "name": [], "bin": [], "contributor": []})
 
         for k, v in tables.items():
@@ -454,72 +1312,71 @@ def main():
 
             if not filtered_rows.empty:
                 t_pd = filtered_rows[["covergroup", "name", "bin"]].copy()
-                t_pd["contributor"] = k
+                t_pd["contributor"] = k.replace(".json", "")
                 ranked = pd.concat([ranked, t_pd], ignore_index=True)
 
-        ranked = ranked.groupby(["covergroup", "name", "bin"], as_index=False)["contributor"].agg(
-            list
-        )
+        ranked = ranked.groupby(["covergroup", "name", "bin"], as_index=False)["contributor"].agg(list)
 
-        with open(
-            os.path.join(args.output, "contributors.html"), "w", encoding="utf-8"
-        ) as html_file:
-            html_file.write(
-                html_code.format(
-                    logo=logo,
-                    title="Merged Coverage Report (By Contributor)",
-                    html_table=ranked.to_html(
-                        classes="display", index=False, table_id="myTable", escape=False
-                    ),
-                )
-            )
+        cg_tables = {
+            cg: g.drop(columns="covergroup").reset_index(drop=True)
+            for cg, g in ranked.groupby("covergroup")
+        }
+        report["contributors"] = {
+            "id": "contributors",
+            "label": "Merged Coverage (By Contributor)",
+            "covergroups": make_contributor_scope(cg_tables),
+        }
 
-        # Walk over the json files again to get the count
+        # Score each test based on its unique/rare contribution to the ranked bins
         scores = []
         for k in tables.keys():
-            scores.append([k, 0, 0, 0, 0])
+            key = k.replace(".json", "")
+            score = unique_rows = rare_rows = total_rows = 0
 
-            for row in ranked.iterrows():
-                if k in row[1]["contributor"]:
-                    scores[-1][4] += 1
-                    if len(row[1]["contributor"]) == 1:
-                        scores[-1][1] += 1000
-                        scores[-1][2] += 1
-                    elif len(row[1]["contributor"]) < 10:
-                        scores[-1][1] += 10
-                        scores[-1][3] += 1
+            for _, row in ranked.iterrows():
+                if key in row["contributor"]:
+                    total_rows += 1
+                    if len(row["contributor"]) == 1:
+                        score += 1000
+                        unique_rows += 1
+                    elif len(row["contributor"]) < 10:
+                        score += 10
+                        rare_rows += 1
                     else:
-                        scores[-1][1] += 1
+                        score += 1
 
-        scores.sort(key=lambda x: x[1], reverse=True)
-        t_pd = pd.DataFrame(
-            scores, columns=["name", "score", "unique rows", "rare rows", "total rows"]
-        )
+            scores.append({
+                "name": key,
+                "score": score,
+                "unique_rows": unique_rows,
+                "rare_rows": rare_rows,
+                "total_rows": total_rows,
+            })
 
-        with open(os.path.join(args.output, "ranked.html"), "w", encoding="utf-8") as html_file:
-            html_file.write(
-                html_code.format(
-                    logo=logo,
-                    title="Ranked Coverage Report",
-                    html_table=t_pd.to_html(
-                        classes="display", index=False, table_id="myTable", escape=False
-                    ),
-                )
-            )
+        scores.sort(key=lambda s: s["score"], reverse=True)
+        report["ranked"] = scores
 
-        html_table += """
+    # Overall coverage summary shown in the report header (prefer the merged view when present)
+    if report["merged"]:
+        overall_source = report["merged"]["covergroups"]
+    else:
+        overall_source = [cg for t in report["tests"] for cg in t["covergroups"]]
+    overall_total = sum(cg["total"] for cg in overall_source)
+    overall_covered = sum(cg["covered"] for cg in overall_source)
+    report["overall"] = {
+        "total": overall_total,
+        "covered": overall_covered,
+        "coverage": round(min((overall_covered / overall_total) * 100, 100), 2) if overall_total else 0.0,
+    }
 
-<h2>Ranked Coverage Report</h2>
-<ul>
-    <li><a href="ranked.html">Ranked Coverage</a></li>
-    <li><a href="contributors.html">Merged Coverage (By Contributor)</a></li>
-</ul>
+    report_json = json.dumps(report).replace("</", "<\\/")
+    html = REPORT_TEMPLATE.replace("__LOGO__", logo).replace("__REPORT_JSON__", report_json)
 
-        """
+    output_path = os.path.join(args.output, "index.html")
+    with open(output_path, "w", encoding="utf-8") as html_file:
+        html_file.write(html)
+    print(f"Report written to {output_path}")
 
-    # Save index.html
-    with open(os.path.join(args.output, "index.html"), "w", encoding="utf-8") as html_file:
-        html_file.write(html_code.format(logo=logo, title="Coverage Report", html_table=html_table))
 
 if __name__ == "__main__":
-  main()
+    main()
