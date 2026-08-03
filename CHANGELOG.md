@@ -1,6 +1,6 @@
 # Changelog
 
-# [Unreleased]
+# [v1.0.1] - 2026-08-03
 
 ## Fixed
  - SequenceItem(): a SequenceItem parented by a Sequence was silently re-parented to the Sequencer, so its get_full_name() dropped the sequence's name and diverged from the path Object.__new__ uses for set_override_by_instance()/Factory variables. SequenceItem now keeps its real parent, so both paths agree.
