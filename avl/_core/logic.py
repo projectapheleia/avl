@@ -109,10 +109,12 @@ class Logic(Var):
 
         super()._apply_constraints_(solver)
 
-        # Add soft constraint randomizing each bit
+        # Add soft constraint randomizing each bit. All the bits come from a
+        # single getrandbits call - one randint per bit is an order of
+        # magnitude more expensive for no extra randomness.
+        bits = random.getrandbits(self.width)
         for b in range(self.width):
-            bv = random.randint(0,1)
-            solver.add_soft(Extract(b,b,self._rand_) == bv, weight=100)
+            solver.add_soft(Extract(b,b,self._rand_) == ((bits >> b) & 1), weight=100)
 
     def __getitem__(self, key):
         if isinstance(key, slice):

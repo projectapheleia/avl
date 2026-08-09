@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+ - `avl.urandom_range(lo, hi)`: uniform random integer in the inclusive range [lo, hi], the same draw AVL uses internally for an unconstrained value. Equivalent to `random.randint` but 2-3x faster, and the closest analogue to SystemVerilog's `$urandom_range`.
+
 ### Changed
+ - Randomization performance: unconstrained values (Var._random_value_) and the per-bit soft constraints on Logic/Fp16/Fp32/Fp64 are now drawn with random.getrandbits instead of random.randint. Var._random_value_() is roughly 2-3x faster; the per-bit draw is 4-6x faster. Distributions are unchanged and still uniform, and random.seed() reproducibility is preserved - but because getrandbits consumes the Mersenne Twister stream differently to randint, a given seed produces a different stimulus sequence to v1.0.1 and earlier. Seeds recorded against older releases will not replay the same values.
  - avl-coverage-analysis: redesigned HTML report as a single self-contained page with AVL/Apheleia branded styling, a searchable hierarchy browser (tests/merged/ranked → covergroups), and a sortable/filterable/searchable covergroup and bin-detail table, replacing the old multi-page DataTables site. The stats scatter-plot popup is now an in-page modal instead of a separate linked file. No more jQuery/DataTables/Plotly CDN dependency, so reports work fully offline.
  - avl-trace-analysis: matched the same branded, sortable/filterable/searchable table styling and dropped the jQuery/DataTables CDN dependency. Added friendlier errors for missing trace files, invalid `--query` expressions, and unknown `--sort` columns (previously raw Python tracebacks). `--sort` now supports descending order via a leading `-` (e.g. `--sort=-data`).
 

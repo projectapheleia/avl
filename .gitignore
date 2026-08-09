@@ -32,6 +32,10 @@ results.xml
 # vcs
 ucli.key
 
+# Benchmarks
+benchmarks/results/
+benchmarks/**/results.csv
+
 .failed
 .passed
 *.log

@@ -88,8 +88,11 @@ class Fp16(Var):
         bv = BitVec(f"{self._idx_}", self.width)
         fp = FP16
 
+        # All the bits come from a single getrandbits call - one randint per bit
+        # is an order of magnitude more expensive for no extra randomness.
+        bits = random.getrandbits(self.width)
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
 
         solver.add(Not(fpIsNaN(self._rand_)))
         solver.add(Not(fpIsInf(self._rand_)))
@@ -226,8 +229,11 @@ class Fp32(Fp16):
         bv = BitVec(f"{self._idx_}", self.width)
         fp = FP32
 
+        # All the bits come from a single getrandbits call - one randint per bit
+        # is an order of magnitude more expensive for no extra randomness.
+        bits = random.getrandbits(self.width)
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
 
         solver.add(Not(fpIsNaN(self._rand_)))
         solver.add(Not(fpIsInf(self._rand_)))
@@ -299,8 +305,11 @@ class Fp64(Fp16):
         bv = BitVec(f"{self._idx_}", self.width)
         fp = FP64
 
+        # All the bits come from a single getrandbits call - one randint per bit
+        # is an order of magnitude more expensive for no extra randomness.
+        bits = random.getrandbits(self.width)
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
 
         solver.add(Not(fpIsNaN(self._rand_)))
         solver.add(Not(fpIsInf(self._rand_)))

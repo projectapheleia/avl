@@ -7,13 +7,16 @@ from __future__ import annotations
 
 import inspect
 import os
-import random
 import warnings
 import weakref
 from collections.abc import Callable
 from typing import Any
 
 from z3 import FP, BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
+
+# Resolved from the partially initialised package - urandom_range is defined at
+# the top of _core/__init__.py, above the import that pulls this module in.
+from . import urandom_range
 
 
 class Var:
@@ -192,7 +195,7 @@ class Var:
         """
         if bounds is None:
             bounds = self._range_()
-        return random.randint(bounds[0], bounds[1])
+        return urandom_range(bounds[0], bounds[1])
 
     # Binary arithmetic
     def __add__(self, other): return self._wrap_(self._cast_(self.value + other))

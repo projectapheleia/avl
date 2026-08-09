@@ -1,3 +1,40 @@
+# ruff: noqa: E402
+# urandom_range is defined before the submodule imports below because .var uses
+# it, and .var is pulled in by the very first of those imports.
+
+import random
+
+
+def urandom_range(lo: int, hi: int) -> int:
+    """
+    Get a uniformly distributed random integer in the inclusive range [lo, hi].
+
+    Equivalent to random.randint(lo, hi), but several times faster. randint
+    defers to randrange, which revalidates its arguments on every call, whereas
+    getrandbits is a direct call into the underlying Mersenne Twister.
+
+    :param lo: The inclusive lower bound.
+    :type lo: int
+    :param hi: The inclusive upper bound.
+    :type hi: int
+    :return: A random integer in [lo, hi].
+    :rtype: int
+    """
+    span = hi - lo + 1
+
+    # Power of two - every draw is already in range
+    if span & (span - 1) == 0:
+        return lo + random.getrandbits(span.bit_length() - 1)
+
+    # Otherwise rejection sample the smallest number of bits covering span. The
+    # rejected fraction is always below a half, so this averages under 2 draws.
+    k = span.bit_length()
+    while True:
+        v = random.getrandbits(k)
+        if v < span:
+            return lo + v
+
+
 from .agent import Agent
 from .bool import Bool
 from .component import Component
@@ -96,4 +133,5 @@ __all__ = [
     "Trace",
     "Memory",
     "Struct",
+    "urandom_range",
 ]

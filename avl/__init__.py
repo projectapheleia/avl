@@ -148,3 +148,6 @@ from ._core import (
 from ._core import (
     Visualization as Visualization,
 )
+from ._core import (
+    urandom_range as urandom_range,
+)
