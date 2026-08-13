@@ -21,7 +21,7 @@ ITERATIONS     ?= 1000
 
 # Randomizations performed per clock edge. One per edge is the default. Raise it
 # only where a single randomization is too cheap to measure against the cost of
-# advancing the clock - $urandom, for instance. ITERATIONS should be a multiple.
+# advancing the clock, around 8 us. ITERATIONS should be a multiple.
 BURST          ?= 1
 
 # A burst bigger than the run itself would randomize more times than were asked
@@ -35,6 +35,11 @@ override BURST := $(shell if [ $(BURST) -gt $(ITERATIONS) ]; then \
 # number is preferable.
 REPEATS        ?= 3
 
+# Randomizations performed by the quality run, which measures how well spread
+# the values were rather than how fast they came. Enough for the per bit
+# statistics to mean something; it is untimed, so it can afford them.
+QUALITY_ITERATIONS ?= 1000
+
 # Random seed, applied to both flavours so a run is repeatable.
 SEED           ?= 1
 
@@ -43,6 +48,9 @@ SAMPLE_INTERVAL ?= 0.02
 
 # Every flavour of a benchmark appends to the same file.
 RESULTS        := $(BENCH_DIR)/results.csv
+
+# The values drawn by this flavour's quality run.
+QUALITY_DUMP   := $(CURDIR)/quality.csv
 
 PYTHON         ?= python3
 

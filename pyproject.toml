@@ -31,7 +31,9 @@ dev = [
     "matplotlib>=3.10.0",
     "sphinx>=8.1.3",
     "sphinx_rtd_theme>=3.0.2",
-    "ruff>=0.11.0"
+    "ruff>=0.11.0",
+    "pyuvm>=4.0.0",
+    "pyvsc>=0.9.5"
 ]
 
 [build-system]
@@ -53,6 +55,11 @@ exclude = ["doc", "build", "dist", "venv", "avl/tools"]
 line-length = 200
 
 fix = false
+
+[tool.ruff.per-file-ignores]
+# A pyvsc constraint block is a series of bare comparisons - the expression is
+# the constraint, and there is nothing to return.
+"benchmarks/randomization/*/cocotb/*_pyuvm.py" = ["B015"]
 
 [tool.ruff.mccabe]
 max-complexity = 40

@@ -26,6 +26,10 @@ BLUE_LIGHT = "#9fc2e8"
 SLOWER = "#b3261e"
 SERIES_COLOURS = [NAVY, BLUE, BLUE_LIGHT]
 
+# The flavours AVL is charted against at the top of the page, in the order they
+# appear there. One that was not run is simply left out.
+OPPONENTS = [("sv", "SystemVerilog"), ("pyuvm", "pyuvm / pyvsc")]
+
 TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -111,6 +115,7 @@ td.fail { color: #b3261e; font-weight: 600; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1.25rem; }
 .charts-wide { max-width: 900px; }
 .charts-wide svg { width: 100%; height: auto; display: block; }
+.charts-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 1.5rem; align-items: start; max-width: 1500px; }
 .chart-note { margin: 0.6rem 0 0; max-width: 900px; }
 figure { margin: 0; }
 figcaption { font-size: 0.82rem; font-weight: 600; color: var(--navy); margin-bottom: 0.35rem; }
@@ -394,13 +399,52 @@ def panel(title: str, subtitle: str, body: str, padded: bool = True) -> str:
     return f'<section class="panel"><div class="panel-header"><h2>{esc(title)}</h2>{sub}</div>{inner}</section>'
 
 
-def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict]) -> str:
+def head_to_head(nets: list[dict], benchmarks: list[str],
+                 opponent: str) -> tuple[list[str], list[float]]:
+    """AVL against one other flavour, benchmark by benchmark.
+
+    The figure is the difference in time per randomization, expressed
+    symmetrically so that twice as fast reads +100% and half as fast reads
+    -100%. Benchmarks the opponent did not run are left out.
+    """
+    labels = []
+    deltas = []
+    for benchmark in benchmarks:
+        entries = {n["flavour"]: n for n in nets if n["benchmark"] == benchmark}
+        avl = entries.get("avl")
+        other = entries.get(opponent)
+        if avl is None or other is None:
+            continue
+
+        ours, theirs = avl["per_iter_us"], other["per_iter_us"]
+        if ours <= 0 or theirs <= 0:
+            continue
+
+        labels.append(benchmark.split("/")[-1])
+        deltas.append((theirs / ours - 1) * 100 if ours <= theirs else -((ours / theirs - 1) * 100))
+
+    return labels, deltas
+
+
+def is_clipped(deltas: list[float]) -> bool:
+    """Whether svg_diverging_chart will have to cap a bar to keep the rest legible."""
+    magnitudes = sorted((abs(d) for d in deltas), reverse=True)
+    return len(magnitudes) > 1 and magnitudes[0] > 3 * magnitudes[1]
+
+
+def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
+           quality: list[dict] | None = None,
+           quality_summary: list[dict] | None = None) -> str:
     """Build the whole page.
 
-    nets  - one entry per benchmark and flavour, randomization cost only
-    raws  - one entry per benchmark, flavour and phase, as measured
-    rows  - every individual run, used for the run to run spread
+    nets            - one entry per benchmark and flavour, randomization cost only
+    raws            - one entry per benchmark, flavour and phase, as measured
+    rows            - every individual run, used for the run to run spread
+    quality         - one entry per benchmark, flavour and field, spread of the draws
+    quality_summary - the worst field per benchmark and flavour
     """
+    quality = quality or []
+    quality_summary = quality_summary or []
     benchmarks = sorted({n["benchmark"] for n in nets})
     iterations = sorted({n["iterations"] for n in nets})
     tools = sorted({n["tool"] for n in nets})
@@ -409,28 +453,17 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict]) -> 
     body = []
 
     # ------------------------------------------------------------- head to head
-    # Time per randomization, one flavour against the other. Expressed
-    # symmetrically, so twice as fast reads +100% and half as fast reads -100%.
-    labels = []
-    deltas = []
-    clipped = False
-    for benchmark in benchmarks:
-        entries = {n["flavour"]: n for n in nets if n["benchmark"] == benchmark}
-        avl = entries.get("avl")
-        sv = entries.get("sv")
-        if avl is None or sv is None:
-            continue
+    # Time per randomization, AVL against each of the other flavours, side by
+    # side. Expressed symmetrically, so twice as fast reads +100% and half as
+    # fast reads -100%.
+    comparisons = []
+    for opponent, caption in OPPONENTS:
+        labels, deltas = head_to_head(nets, benchmarks, opponent)
+        if deltas:
+            comparisons.append((caption, labels, deltas))
 
-        ours, theirs = avl["per_iter_us"], sv["per_iter_us"]
-        if ours <= 0 or theirs <= 0:
-            continue
-
-        labels.append(benchmark.split("/")[-1])
-        deltas.append((theirs / ours - 1) * 100 if ours <= theirs else -((ours / theirs - 1) * 100))
-
-    if deltas:
-        magnitudes = sorted((abs(d) for d in deltas), reverse=True)
-        clipped = len(magnitudes) > 1 and magnitudes[0] > 3 * magnitudes[1]
+    if comparisons:
+        clipped = any(is_clipped(deltas) for _, _, deltas in comparisons)
 
         note = (
             "Bars are capped just past the second largest so one outlier cannot flatten the "
@@ -438,16 +471,62 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict]) -> 
             if clipped else ""
         )
 
+        # One comparison on its own is given the width the page used to give it.
+        width = 680 if len(comparisons) > 1 else 760
+        charts = "".join(
+            figure(f"AVL against {caption}", svg_diverging_chart(labels, deltas, width=width))
+            for caption, labels, deltas in comparisons
+        )
+
         body.append(panel(
-            "AVL against SystemVerilog",
+            "Head to head",
             "time per randomization, harness subtracted",
-            f'<div class="charts-wide">{svg_diverging_chart(labels, deltas)}</div>'
+            f'<div class="{"charts-head" if len(comparisons) > 1 else "charts-wide"}">'
+            f"{charts}</div>"
             '<div class="legend">'
             f'<span><i style="background:{NAVY}"></i>AVL faster</span>'
             f'<span><i style="background:{SLOWER}"></i>AVL slower</span>'
             "</div>"
             f'<p class="notes chart-note">Symmetric, so twice as fast reads +100% and half as '
             f"fast reads -100%. {note}</p>",
+        ))
+
+    # ------------------------------------------------------- randomization quality
+    if quality_summary:
+        benches = sorted({q["benchmark"] for q in quality_summary})
+        flavours = sorted({q["flavour"] for q in quality_summary})
+        labels = [b.split("/")[-1] for b in benches]
+
+        def series(metric):
+            return [(f, [next((q[metric] for q in quality_summary
+                               if q["benchmark"] == b and q["flavour"] == f), 0.0)
+                         for b in benches]) for f in flavours]
+
+        charts = [
+            figure("Bit skew - lower is better",
+                   svg_bar_chart(labels, series("bit_skew"), "", width=520), flavours),
+            figure("Entropy - 1.00 is a flat spread",
+                   svg_bar_chart(labels, series("entropy"), "", width=520), flavours),
+        ]
+
+        headers = ["benchmark", "flavour", "field", "width", "draws", "distinct", "entropy",
+                   "bit skew"]
+        table_rows = [[q["benchmark"], q["flavour"], q["field"], q["width"], f"{q['draws']:,}",
+                       f"{q['distinct']:.3f}", f"{q['entropy']:.3f}", f"{q['bit_skew']:.3f}"]
+                      for q in quality]
+
+        body.append(panel(
+            "Quality of randomization",
+            "measured on a separate untimed run",
+            f'<div class="charts">{"".join(charts)}</div>'
+            '<p class="notes chart-note">A solver can be made much faster by exploring less, or '
+            'by leaving the bits a constraint does not pin at whatever it reaches for first, and '
+            'a timing measurement cannot see either. <b>Entropy</b> is the spread of the values '
+            'drawn, normalised so 1.00 is flat across every value any flavour managed for that '
+            'field. <b>Bit skew</b> is how far the flavour strays from what the others agree on '
+            'for any one bit, ignoring bits the constraints pinned - which is where a cheaper '
+            'strategy shows up. Neither can see a bias every flavour shares.</p>'
+            + table(headers, table_rows, numeric=set(range(3, 8))),
         ))
 
     # ---------------------------------------------------------------- summary
@@ -561,12 +640,13 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict]) -> 
         "How this is measured",
         "",
         '<div class="notes">'
-        "<p>Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same cocotb "
-        "testbench</b>, which drives clock and reset and randomizes once per rising edge. The only "
+        "<p>Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
+        "harness</b>, which drives clock and reset and randomizes once per rising edge. The only "
         "difference is where the randomization happens: the <b>sv</b> flavour randomizes inside the "
         "RTL with SystemVerilog classes and constraints solved by the simulator, the <b>avl</b> "
-        "flavour randomizes the identical object from Python with AVL. Everything else - the "
-        "simulator, the elaboration, the clock, the loop - is common.</p>"
+        "flavour randomizes the identical object from Python with AVL, and the <b>pyuvm</b> flavour "
+        "randomizes it again as a pyvsc randobj, from the run_phase of a pyuvm test. Everything "
+        "else - the simulator, the elaboration, the clock, the loop - is common.</p>"
         "<p>Each testbench is measured twice. The <b>baseline</b> drives exactly the same number of "
         "clock cycles with randomization switched off, so it captures startup, elaboration, cocotb "
         "bringup and the cost of the loop itself. The <b>run</b> does the same with randomization "
@@ -574,10 +654,17 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict]) -> 
         "and nothing else.</p>"
         "<p>CPU time is accounted across the whole process tree. A simulator solves constraints in "
         "a separate solver process which it never reaps, so <b>getrusage</b> and <b>/usr/bin/time</b> "
-        "attribute none of that solver's CPU time to the run. Sampling <b>/proc</b> for the run's "
-        "process group recovers it. CPU usage above 100% means more than one core was busy.</p>"
+        "attribute none of that solver's CPU time to the run. Sampling every process in the run's "
+        "process group recovers it - through <b>/proc</b> on Linux and <b>libproc</b> on macOS. "
+        "CPU usage above 100% means more than one core was busy.</p>"
+        "<p>Randomization quality is measured separately, on an untimed run that records every "
+        "value drawn. It is kept out of the timed runs so that recording cannot be measured as "
+        "randomization cost.</p>"
         "<p>Reported figures are the median across runs; the spread chart shows the full range. "
-        "Benchmarks, flavours and repeats are always run one at a time.</p>"
+        "Benchmarks, flavours and repeats are always run one at a time. A flavour may run a "
+        "different number of randomizations where its cost is out of proportion to the rest - "
+        "everything compared here is a time <b>per</b> randomization, so the counts need not "
+        "match.</p>"
         "</div>",
     ))
 

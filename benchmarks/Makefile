@@ -20,6 +20,9 @@
 BENCH_MAKEFILES := $(shell find */* -type l -name Makefile -lname '*bench.mk')
 BENCHES         := $(patsubst %/Makefile,%,$(BENCH_MAKEFILES))
 RESULTS         := $(patsubst %/Makefile,%/results.csv,$(BENCH_MAKEFILES))
+# Left as a glob for the shell to expand when the report runs - make's own
+# wildcard caches the directory from before the runs wrote anything.
+QUALITY         := $(patsubst %/Makefile,%/*/quality.csv,$(BENCH_MAKEFILES))
 
 PYTHON    ?= python3
 
@@ -42,6 +45,9 @@ BENCH_VARS = BENCH_REPORT=0 \
 %clean: %Makefile
 	$(MAKE) --no-print-directory -C $(dir $<) clean > /dev/null 2>&1
 
+%quality: %Makefile
+	$(MAKE) --no-print-directory -C $(dir $<) quality $(BENCH_VARS)
+
 .PHONY: list
 list: $(BENCH_MAKEFILES)
 	$(foreach dep, $^, echo $(dir $(dep));)
@@ -50,9 +56,13 @@ list: $(BENCH_MAKEFILES)
 bench: $(patsubst %/Makefile,%/bench,$(BENCH_MAKEFILES))
 	$(MAKE) --no-print-directory report
 
+.PHONY: quality
+quality: $(patsubst %/Makefile,%/quality,$(BENCH_MAKEFILES))
+
 .PHONY: report
 report:
-	$(PYTHON) scripts/bench_report.py $(wildcard $(RESULTS)) --output results
+	$(PYTHON) scripts/bench_report.py $(wildcard $(RESULTS)) --output results \
+	  --quality $(QUALITY)
 
 .PHONY: clean
 clean: $(patsubst %/Makefile,%/clean,$(BENCH_MAKEFILES))

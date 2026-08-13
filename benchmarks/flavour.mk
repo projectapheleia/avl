@@ -6,14 +6,17 @@
 # Compiles and runs one flavour of a benchmark. Symlink this file in as
 # <benchmark>/<flavour>/Makefile - the directory name is the flavour.
 #
-# Both flavours are built and run exactly the same way, through cocotb, from the
-# same RTL and the same cocotb testbench. The flavour changes two things and
-# nothing else:
+# Every flavour is built and run exactly the same way, through cocotb, from the
+# same RTL. The flavour changes where the randomization happens and nothing
+# else:
 #
-#   sv   +define+BENCH_SV_RANDOMIZE, so the RTL randomizes with SystemVerilog
-#        classes and constraints, solved by the simulator
-#   avl  no define, so the cocotb testbench randomizes the identical object
-#        with AVL instead
+#   sv     +define+BENCH_SV_RANDOMIZE, so the RTL randomizes with SystemVerilog
+#          classes and constraints, solved by the simulator
+#   avl    no define, so the cocotb testbench randomizes the identical object
+#          with AVL instead
+#   pyuvm  no define either, and the same RTL, but the testbench is the pyuvm
+#          one - the identical object as a pyvsc randobj, randomized from the
+#          run_phase of a pyuvm test
 #
 # Because the flow is cocotb's, any simulator cocotb supports can be used:
 #
@@ -31,10 +34,17 @@ VERILOG_INCLUDE_DIRS += $(BENCH_DIR)/rtl
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL             := $(notdir $(BENCH_DIR))_bench
 TOPLEVEL_LANG        ?= verilog
-PYTHONPATH           := $(BENCH_DIR)/cocotb
+# The testbenches import bench_dump from scripts/ for the quality run.
+PYTHONPATH           := $(BENCH_DIR)/cocotb:$(BENCH_ROOT)/scripts
 
-# MODULE is the basename of the Python test file(s)
+# MODULE is the basename of the Python test file(s). The sv and avl flavours
+# share one testbench - the loop is common and only the randomization is under
+# an if. pyuvm brings its own, because the loop has to live inside a uvm test.
+ifeq ($(FLAVOUR),pyuvm)
+MODULE               ?= $(notdir $(BENCH_DIR))_pyuvm
+else
 MODULE               ?= $(notdir $(BENCH_DIR))
+endif
 
 export PYTHONPATH
 export BENCH_FLAVOUR := $(FLAVOUR)
@@ -77,9 +87,9 @@ COCOTB_RUN            = env MAKEFLAGS= \
                           $(MAKE) --no-print-directory -C $(CURDIR) sim \
                             COCOTB_PLUSARGS="+randomize=$(1) +burst=$(BURST) $(BENCH_PLUSARGS)"
 
-.PHONY: bench build warm baseline run
+.PHONY: bench build warm baseline run quality
 
-bench: build warm baseline run
+bench: build warm baseline run quality
 
 # Elaborate and compile the model, outside the measurement.
 build:
@@ -105,6 +115,26 @@ run: build
 	@$(BENCH_TIME) --phase run --iterations $(ITERATIONS) --log $(CURDIR)/run.log \
 	  -- $(call COCOTB_RUN,1)
 
+# Records every value drawn, for bench_quality.py to measure the spread of.
+# Untimed and separate from the measured runs, because the values have to be
+# written somewhere and that must not show up in a measurement. Runs last so it
+# cannot perturb them either.
+quality: build
+	@rm -f $(QUALITY_DUMP)
+	@env MAKEFLAGS= \
+	   COCOTB_RANDOM_SEED=$(SEED) \
+	   BENCH_ITERATIONS=$(QUALITY_ITERATIONS) \
+	   BENCH_BURST=1 \
+	   BENCH_RANDOMIZE=1 \
+	   BENCH_DUMP=$(QUALITY_DUMP) \
+	   $(MAKE) --no-print-directory -C $(CURDIR) sim \
+	     COCOTB_PLUSARGS="+randomize=1 +burst=1 +dump=$(QUALITY_DUMP) $(BENCH_PLUSARGS)" \
+	   > $(CURDIR)/quality.log 2>&1 || \
+	  { echo "  $(FLAVOUR)  quality FAILED - see $(CURDIR)/quality.log"; exit 1; }
+	@test -s $(QUALITY_DUMP) || \
+	  { echo "  $(FLAVOUR)  quality recorded nothing - see $(CURDIR)/quality.log"; exit 1; }
+	@echo "  $(FLAVOUR)  quality   $(QUALITY_ITERATIONS) draws recorded"
+
 clean::
 	rm -rf $(BENCH_DIR)/cocotb/__pycache__/
-	rm -f *.log *.xml
+	rm -f *.log *.xml quality.csv

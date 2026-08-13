@@ -25,6 +25,35 @@ class Var:
     _lookup_ = weakref.WeakValueDictionary()
     _AVL_CONSTRAINT_DEBUG_ = os.environ.get("AVL_CONSTRAINT_DEBUG") is not None
 
+    # z3 variables are pooled by their sort and their position in the solve,
+    # rather than created one per Var instance. A testbench builds a fresh item
+    # per transaction, so anything derived from a per instance z3 variable - the
+    # constraint expressions, the per bit randomization clauses, the analysis of
+    # which bits the constraints pin - would have to be rebuilt for every single
+    # randomization. Pooling makes all of it reusable by the next object of the
+    # same shape.
+    #
+    # Two objects sharing a z3 variable is safe because a randomization builds
+    # its own solver and solves alone; two of them are never in the same one.
+    _z3_pool_: dict[str, Any] = {}
+
+    @staticmethod
+    def _pooled_z3_(name: str, factory: Callable[[], Any]) -> Any:
+        """The pooled z3 variable of this name, created on first use.
+
+        :param name: Pooled name - see _z3_name_.
+        :type name: str
+        :param factory: Builds the variable if the pool does not hold it yet.
+        :type factory: Callable
+        :return: The z3 variable.
+        :rtype: Any
+        """
+        variable = Var._z3_pool_.get(name)
+        if variable is None:
+            variable = factory()
+            Var._z3_pool_[name] = variable
+        return variable
+
     @staticmethod
     def _register_(new_var : Var) -> None:
         Var._lookup_[Var._count_] = new_var
@@ -175,10 +204,28 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | FP:
+    def _z3_name_(self, ordinal: int) -> str:
+        """
+        The pooled name for a variable at this position in a solve.
+
+        The name carries the variable's sort as well as its position, so that two
+        variables of different sorts at the same position cannot share a pooled
+        entry. The class name is distinct per sort for every type except Logic,
+        which covers every width with one class and so overrides this.
+
+        :param ordinal: Position of the variable within the randomization.
+        :type ordinal: int
+        :return: The name.
+        :rtype: str
+        """
+        return f"v{ordinal}_{type(self).__name__}"
+
+    def _z3_(self, name: str) -> BoolRef | IntNumRef | BitVecNumRef | FP:
         """
         Return the Z3 representation of the variable.
 
+        :param name: Pooled name to give it - see _z3_name_.
+        :type name: str
         :return: The Z3 representation of the variable.
         :rtype: BoolRef | IntNumRef | BitVecNumRef | RatNumRef
         """
@@ -397,6 +444,10 @@ class Var:
         """
         Apply the constraints to the solver.
 
+        Randomization is applied separately, by _apply_randomization_, so that
+        the hard constraints can be examined on their own first - see
+        Object._free_bits_.
+
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
         """
@@ -407,6 +458,26 @@ class Var:
             solver.add_soft(c(self._rand_), weight="100")
 
         return any(self._constraints_.values())
+
+    def _apply_randomization_(self, solver : Optimize, free_bits : list[int]|None = None,
+                              record : list|None = None) -> None:
+        """
+        Add the soft constraints that spread this variable over its legal values.
+
+        A type with no spreading of its own leaves the solver to return whichever
+        legal value it finds first. The types that do it bit by bit - Logic and its
+        subclasses, and Float - override this.
+
+        :param solver: The optimization solver to apply the constraints to.
+        :type solver: Optimize
+        :param free_bits: The bits to constrain, for the types that work bit by
+            bit. None means every bit.
+        :type free_bits: list[int], optional
+        :param record: When given, the (bit, value) pairs asked for are appended to
+            it, so the clause plan can be settled against what the solver grants.
+        :type record: list, optional
+        """
+        pass
 
     def randomize(self, hard: list|None = None, soft: list|None = None) -> None:
         """
@@ -430,6 +501,7 @@ class Var:
         def new_solver():
             solver = Optimize()
             self._apply_constraints_(solver)
+            self._apply_randomization_(solver)
 
             return solver
 
@@ -463,15 +535,17 @@ class Var:
 
                             msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
                             for v in vars_in_constraint:
-                                var = Var._lookup_[int(v.decl().name())]
-                                msg += f"\t\tVariable {v} == {var._varname_} ({var._file_}:{var._line_}\n"
+                                msg += (f"\t\tVariable {v} == {self._varname_} "
+                                        f"({self._file_}:{self._line_})\n")
 
                 raise Exception(msg)
             return cast_value
 
-        # Create rand / z3 variable
-        if self._auto_random_ and self._rand_ is None:
-            self._rand_ = self._z3_()
+        # Create rand / z3 variable. The only variable in this solve, so it takes
+        # position 0 - reassigned each time, for the same reason as in
+        # Object.randomize: it may have been given another position there.
+        if self._auto_random_:
+            self._rand_ = self._z3_(self._z3_name_(0))
 
         # User defined pre-randomization function
         self.pre_randomize()

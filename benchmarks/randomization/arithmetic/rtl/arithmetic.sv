@@ -74,16 +74,29 @@ module arithmetic_bench (
     longint unsigned checksum = 0;
     int unsigned     count    = 0;
 
+    // Written only by the quality run, which is untimed - see +dump.
+    int              dump_fd  = 0;
+    string           dump_file;
+
     initial begin
-        item = new();
         // Cleared for the baseline run, which measures the harness on its own.
         void'($value$plusargs("randomize=%d", enable));
         void'($value$plusargs("burst=%d", burst));
+
+        if ($value$plusargs("dump=%s", dump_file)) begin
+            dump_fd = $fopen(dump_file, "w");
+            $fwrite(dump_fd, "a:16,b:16,c:16,d:16\n");
+        end
     end
 
     always @(posedge clk) begin
         if (rst_n && enable) begin
             repeat (burst) begin
+                // A fresh item per randomization, the way a testbench builds
+                // a fresh sequence item per transaction, rather than one item
+                // reused - which would let a solver amortize work across draws.
+                item = new();
+
                 if (item.randomize() == 0) begin
                     $fatal(1, "randomization failed on iteration %0d", count);
                 end
@@ -101,6 +114,10 @@ module arithmetic_bench (
                     $fatal(1, "c_d violated : d=%0d", item.d);
                 end
 
+                if (dump_fd != 0) begin
+                    $fwrite(dump_fd, "%0d,%0d,%0d,%0d\n", item.a, item.b, item.c, item.d);
+                end
+
                 checksum += 64'(item.a) + 64'(item.b) + 64'(item.c) + 64'(item.d);
                 count    += 1;
             end
@@ -108,6 +125,7 @@ module arithmetic_bench (
     end
 
     final begin
+        if (dump_fd != 0) $fclose(dump_fd);
         $display("BENCH_RESULT flavour=sv iterations=%0d checksum=%0d", count, checksum);
     end
 `endif

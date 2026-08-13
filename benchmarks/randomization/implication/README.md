@@ -3,21 +3,22 @@
 Implication and dependency constraints - one random field steering the legal values of the
 others.
 
-| Constraint | Property | SystemVerilog | AVL |
-|---|---|---|---|
-| `c_mode` | the field the rest depend on | `mode <= 3;` | `ULE(mode, 3)` |
-| `c_0` | implies an exact value | `(mode == 0) -> (len == 0);` | `Implies(mode == 0, length == 0)` |
-| `c_1` | implies an upper bound | `(mode == 1) -> (len <= 16);` | `Implies(mode == 1, ULE(length, 16))` |
-| `c_2` | implies a range on another field | `(mode == 2) -> (addr >= 16'h1000 && addr < 16'h2000);` | `Implies(mode == 2, And(UGE(addr, 0x1000), ULT(addr, 0x2000)))` |
-| `c_3` | implies a lower bound | `(mode == 3) -> (len > 200);` | `Implies(mode == 3, UGT(length, 200))` |
-| `c_valid` | two sided dependency | `if (len > 100) valid == 1; else valid == 0;` | `If(UGT(length, 100), valid == 1, valid == 0)` |
+| Constraint | Property | SystemVerilog | AVL | pyvsc |
+|---|---|---|---|---|
+| `c_mode` | the field the rest depend on | `mode <= 3;` | `ULE(mode, 3)` | `self.mode <= 3` |
+| `c_0` | implies an exact value | `(mode == 0) -> (len == 0);` | `Implies(mode == 0, length == 0)` | `with vsc.implies(self.mode == 0): self.len == 0` |
+| `c_1` | implies an upper bound | `(mode == 1) -> (len <= 16);` | `Implies(mode == 1, ULE(length, 16))` | `with vsc.implies(self.mode == 1): self.len <= 16` |
+| `c_2` | implies a range on another field | `(mode == 2) -> (addr >= 16'h1000 && addr < 16'h2000);` | `Implies(mode == 2, And(UGE(addr, 0x1000), ULT(addr, 0x2000)))` | `with vsc.implies(self.mode == 2): self.addr >= 0x1000` / `self.addr < 0x2000` |
+| `c_3` | implies a lower bound | `(mode == 3) -> (len > 200);` | `Implies(mode == 3, UGT(length, 200))` | `with vsc.implies(self.mode == 3): self.len > 200` |
+| `c_valid` | two sided dependency | `if (len > 100) valid == 1; else valid == 0;` | `If(UGT(length, 100), valid == 1, valid == 0)` | `with vsc.if_then(self.len > 100): ...` / `with vsc.else_then: ...` |
 
-A constraint written as `if / else` constrains both branches, so it becomes `If` rather than a
-single `Implies`. Every mode is satisfiable, and the checks confirm the dependency held for the
-mode that was drawn.
+A constraint written as `if / else` constrains both branches, so it becomes `If` in AVL and
+`if_then` / `else_then` in pyvsc, rather than a single implication. Every mode is satisfiable, and
+the checks confirm the dependency held for the mode that was drawn.
 
 - SystemVerilog : [rtl/implication.sv](rtl/implication.sv) (behind `` `ifdef BENCH_SV_RANDOMIZE ``)
 - AVL : [cocotb/implication.py](cocotb/implication.py)
+- pyuvm / pyvsc : [cocotb/implication_pyuvm.py](cocotb/implication_pyuvm.py)
 
 ```sh
 make            # or: make ITERATIONS=2000

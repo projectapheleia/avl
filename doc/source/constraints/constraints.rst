@@ -14,3 +14,4 @@ AVL aims to bridge this gap, without enforcing a specific way of working, allowi
 
     random
     z3
+    performance

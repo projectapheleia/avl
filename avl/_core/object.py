@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import copy
 import os
+import random
 import warnings
 from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import Any, TypeVar
 
 import tabulate
-from z3 import BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
+from z3 import (BitVecNumRef, BitVecRef, Bool, BoolRef, Extract, IntNumRef, Optimize, Solver,
+                fpToIEEEBV, is_fp, sat, z3util)
 
 from .factory import Factory
 from .log import Log
@@ -585,6 +587,279 @@ class Object:
             if name in self._constraints_[t]:
                 del self._constraints_[t][name]
 
+    # Randomizations of one constraint shape before the free bit analysis is worth
+    # the solve it costs. An object randomized once - a sequence item, typically -
+    # never pays for it; a loop that keeps building the same item pays once.
+    _FREE_BITS_AFTER_ = 4
+
+    # Randomizations spent measuring which of a variable's soft clauses the
+    # constraints actually grant, before its clause plan is frozen. Measuring costs
+    # one shift and compare per clause, and only over this many solves.
+    _CALIBRATE_FOR_ = 16
+
+    # How much of the gap between a variable's budget and the number of clauses
+    # the last solve granted it each measurement closes.
+    _CALIBRATE_RATE_ = 0.5
+
+    # How often a free bit's clause must be granted for it to count as reliable
+    # rather than contested. A bit no other constraint reaches is granted every time.
+    # A bit whose value another variable decides is granted only when the random draw
+    # happens to agree with that variable, which for a single bit is about half the
+    # time. The two are far apart, so this sits between them, near the top.
+    _ALWAYS_GRANTED_ = 0.95
+
+    # Constraint shape -> the analysis of it. Shared by every object, because the
+    # answer depends on the constraint expressions and the z3 variables they are
+    # built over, both of which are now shared between objects of the same shape.
+    # The asserted expressions are held alongside the result to keep their ASTs
+    # alive, so z3 cannot recycle an AST id underneath a key.
+    _free_bits_cache_: dict = {}
+
+    def _free_bits_(self, hard : list, soft : list,
+                    constrained_vars : dict) -> tuple[dict[int, list[int]], dict]:
+        """
+        The bits of each variable that the hard constraints leave a choice about.
+
+        Randomization asks every bit, softly, to match a random draw. A bit the
+        constraints pin to one value can never be traded against anything - its
+        clause is either always satisfied or always violated - so dropping it
+        moves every candidate solution's cost by the same amount and leaves the
+        distribution exactly as it was. What it does change is how much the MaxSMT
+        search has to carry: constraints that bound a 32 bit field to a few
+        thousand pin two thirds of its bits.
+
+        Only the hard constraints decide which bits are free. The soft ones are
+        taken for the cache key alone, because the entry also carries the clause
+        plan - and that does depend on them, since a soft constraint competes with
+        the randomization clauses for the same objective. Keying on both keeps one
+        shape's plan away from another that merely shares its hard constraints.
+
+        :param hard: The hard constraints in force, as z3 expressions.
+        :type hard: list
+        :param soft: The soft constraints in force, as z3 expressions. Part of the
+            cache key, not of the analysis.
+        :type soft: list
+        :param constrained_vars: The variables taking part in the solve.
+        :type constrained_vars: dict
+        :return: Free bits per pooled z3 variable, and the cache entry for this
+            constraint shape - which also carries the clause budget, see
+            _clause_plan_. A variable absent from the free bits should be
+            randomized in full.
+        :rtype: tuple[dict[int, list[int]], dict]
+        """
+        # Identity of the constraint shape. z3 hash conses, so rebuilding the same
+        # expression over the same variables yields the same AST and the same id -
+        # but only while that AST is alive, and an id is reused once it is not. So
+        # both maps below hold on to the expressions they were keyed by. Without
+        # that the ids churn from one randomization to the next, and worse, a
+        # recycled id could match a key it has nothing to do with.
+        #
+        # The ids are only shared between objects at all because the z3 variables
+        # are pooled - see Var._pooled_z3_.
+        key = (tuple(sorted(e.get_id() for e in hard)),
+               tuple(sorted(e.get_id() for e in soft)),
+               tuple(sorted(v._rand_.get_id() for v in constrained_vars.values())))
+
+        entry = Object._free_bits_cache_.get(key)
+        if entry is None:
+            # First sighting: keep the expressions, so that the next randomization
+            # of this shape rebuilds them onto the same ASTs and lands on this key.
+            # Both lists are held, since both were keyed on.
+            entry = Object._free_bits_cache_[key] = {"count": 1, "exprs": (hard, soft),
+                                                     "free": None, "plan": None,
+                                                     "calib": None}
+            return {}, entry
+
+        if entry["free"] is not None:
+            return entry["free"], entry
+
+        entry["count"] += 1
+        if entry["count"] <= self._FREE_BITS_AFTER_:
+            return {}, entry
+
+        # Name every bit with a boolean and ask z3 which of them its constraints
+        # force. One solve for the lot - asking bit by bit is an order of magnitude
+        # more expensive.
+        solver = Solver()
+        solver.add(hard)
+
+        names = {}
+        for v in constrained_vars.values():
+            width = getattr(v, "width", None)
+            if width is None or not isinstance(v._rand_, BitVecRef):
+                continue
+            for b in range(width):
+                name = f"fb_{v._rand_}_{b}"
+                names[name] = (v._rand_.get_id(), b)
+                solver.add(Bool(name) == (Extract(b, b, v._rand_) == 1))
+
+        free = {}
+        if names:
+            result, consequences = solver.consequences([], [Bool(n) for n in names])
+            if result == sat:
+                pinned = set()
+                for implication in consequences:
+                    literal = implication.arg(1)
+                    if literal.decl().name() == "not":
+                        literal = literal.arg(0)
+                    pinned.add(str(literal))
+
+                for name, (rand_id, b) in names.items():
+                    if name not in pinned:
+                        free.setdefault(rand_id, []).append(b)
+
+                # A variable pinned outright has no entry above, which would
+                # otherwise read as "randomize every bit".
+                for v in constrained_vars.values():
+                    if hasattr(v, "width") and isinstance(v._rand_, BitVecRef):
+                        free.setdefault(v._rand_.get_id(), [])
+
+        entry["free"] = free
+        return free, entry
+
+    def _clause_plan_(self, entry : dict, free_bits : dict) -> dict[int, tuple]:
+        """
+        Which bits of each variable are worth a randomization clause.
+
+        The free bit analysis drops the bits the constraints pin to a constant - the
+        bits with no choice at all. What it cannot see is that the bits it leaves may
+        still not be free to combine: constraints routinely allow far fewer
+        combinations of them than their count suggests. Twelve free bits span 4096
+        combinations, so on a field the constraints hold to a few hundred legal
+        values, the combination a clause per free bit describes is usually not one
+        of the legal ones.
+
+        This is a matter of degree rather than kind, and it is not settled by how
+        many variables a constraint mentions. A single variable range leaves it mild
+        - 1000 <= a <= 2000 forbids about half the combinations of the eleven bits it
+        leaves unpinned. Constraints that tie variables to each other make it severe:
+        a field built bitwise out of two others has no freedom left at all once they
+        are chosen, however few of its bits are pinned outright.
+
+        The surplus is not merely wasted. Asking for a combination that is not legal
+        means some of those clauses have to be given up, and core guided MaxSMT gives
+        them up a core at a time: it finds a set of soft clauses that cannot all hold
+        alongside the hard constraints, relaxes it, and solves again. So the search
+        runs a round per core, and the number of rounds grows with how many clauses
+        must be given up in total - which is the bulk of the cost of a randomization.
+        Clauses that can all be satisfied together take part in no core, so removing
+        them would save nothing. Only the contested bits are worth rationing.
+
+        Which bits those are is not worth deriving up front - it is a property of
+        the whole constraint system - but it is cheap to observe, because the
+        solution to compare against is already in hand once the solve is done. So
+        over the first few randomizations of a constraint shape each bit is asked
+        about and its answer noted, and the plan below is then frozen. Steady state
+        pays nothing to maintain it.
+
+        The plan per variable is (reliable, contested, k): the free bits granted so
+        reliably that they are always asked about, the free bits that are not, and
+        how many of the latter to draw each time. Both are drawn from the free bits,
+        so neither is pinned - "pinned" stays reserved for a bit the hard constraints
+        force to one value, which the free bit analysis has already removed.
+
+        A variable ends up with an empty contested list, and so is asked about
+        exactly as it was before, when there is nothing worth rationing: either every
+        bit is reliable, or the budget covers the contested ones anyway. Single
+        variable constraints tend to land there - the range above does, its contested
+        bits being too few to be worth rationing - but nothing guarantees it. What
+        decides is the measurement, not the shape of the constraints.
+
+        A plan describes a solve of the object's own constraints and nothing else.
+        The cache key does not cover constraints passed to randomize(), and a plan
+        cannot be carried across them the way the pinned bits can, so randomize()
+        only reaches for a plan - or teaches one - when it was called without them.
+        See the comment at the call site.
+
+        :param entry: Cache entry for this constraint shape, from _free_bits_.
+        :type entry: dict
+        :param free_bits: Free bits per pooled z3 variable.
+        :type free_bits: dict
+        :return: (reliable, contested, k) per pooled z3 variable.
+        :rtype: dict[int, tuple]
+        """
+        plan = entry["plan"]
+        if plan is None:
+            # Ask about everything while measuring, so every bit gets an answer,
+            # and so a shape that is never measured behaves as it did before.
+            plan = entry["plan"] = {i: (b, (), 0) for i, b in free_bits.items()}
+            entry["calib"] = {i: {"budget": float(len(b)), "n": 0, "free": b,
+                                  "grant": dict.fromkeys(b, 0),
+                                  "asked": dict.fromkeys(b, 0)}
+                              for i, b in free_bits.items()}
+        return plan
+
+    def _settle_plan_(self, entry : dict, record : list, values : dict) -> None:
+        """
+        Fold what the solver granted back into each variable's clause plan.
+
+        :param entry: Cache entry for this constraint shape, from _free_bits_.
+        :type entry: dict
+        :param record: (variable, pooled z3 id, clauses asked for) per variable.
+        :type record: list
+        :param values: The solved values, keyed by Var index.
+        :type values: dict
+        """
+        calib = entry["calib"]
+
+        settled = True
+        for var, rand_id, asked in record:
+            value = values.get(var._idx_)
+            state = calib.get(rand_id)
+            if state is None or not asked or not isinstance(value, int):
+                continue
+
+            grant, asked_count = state["grant"], state["asked"]
+            granted = 0
+            for b, want in asked:
+                asked_count[b] += 1
+                if ((value >> b) & 1) == want:
+                    grant[b] += 1
+                    granted += 1
+
+            # Aim one clause above what was granted rather than at it, so a budget
+            # that has been cut too far can still climb back.
+            state["n"] += 1
+            state["budget"] += self._CALIBRATE_RATE_ * (
+                min(len(state["free"]), granted + 1) - state["budget"])
+
+            # Applied while still measuring as well as after, so that what is
+            # granted is measured under the plan it is being used to choose. Left
+            # to converge against the full set of bits it would settle high, on a
+            # count only the full set can grant.
+            entry["plan"][rand_id] = self._settled_plan_(state)
+
+            if state["n"] < self._CALIBRATE_FOR_:
+                settled = False
+
+        if settled:
+            entry["calib"] = None
+
+    def _settled_plan_(self, state : dict) -> tuple:
+        """
+        Turn a variable's measurements into the plan described by _clause_plan_.
+
+        :param state: Calibration state for one variable.
+        :type state: dict
+        :return: (reliable, contested, k).
+        :rtype: tuple
+        """
+        free, grant, asked = state["free"], state["grant"], state["asked"]
+        reliable, contested = [], []
+        for b in free:
+            # A bit not asked about yet has said nothing, so it counts as contested
+            # until it has.
+            granted_always = asked[b] and grant[b] >= asked[b] * self._ALWAYS_GRANTED_
+            (reliable if granted_always else contested).append(b)
+
+        # The reliable bits are already covered, so the budget only has to stretch
+        # over the rest. At least one, so a variable is never left unspread.
+        k = max(1, round(state["budget"]) - len(reliable))
+        if k >= len(contested):
+            # Nothing to ration - ask about every free bit, as before.
+            return (free, (), 0)
+        return (reliable, contested, k)
+
     def pre_randomize(self) -> None:
         """
         Pre-randomization function.
@@ -634,9 +909,16 @@ class Object:
             def is_solver_var(a : Any) -> bool:
                 return isinstance(a, Var) and a._auto_random_ and a._idx_ in var_ids
 
+            def add_soft(expr : BoolRef) -> None:
+                # Kept as well as asserted: a soft constraint competes with the
+                # randomization clauses for the same objective, so it belongs in the
+                # constraint shape that the clause plan is cached against. It is not
+                # part of the free bit analysis, which only asks what is legal.
+                static_soft.append(expr)
+                solver.add_soft(expr, weight=100)
+
             # Apply class wide constraints
-            for truth_value, add_fn in [(True, solver.add),
-                                        (False, lambda expr: solver.add_soft(expr, weight=100))]:
+            for truth_value, add_fn in [(True, solver.add), (False, add_soft)]:
                 for fn, args in self._constraints_[truth_value].values():
                     # Skip: no solver var → constraint may collapse to Python False → UNSAT.
                     if not any(is_solver_var(a) for a in args):
@@ -659,22 +941,25 @@ class Object:
             cast_values = {}
             if solver.check() == sat:
                 model = solver.model()
-                for var in model.decls():
-                    try:
-                        v = Var._lookup_[int(var.name())]
-                    except Exception:
+
+                # A pooled z3 name no longer identifies the variable it belongs
+                # to, so read the values off the variables of this solve rather
+                # than off the model's declarations. Anything the solver never saw
+                # is left out, and drawn directly below instead.
+                declared = {d.name() for d in model.decls()}
+                for v in constrained_vars.values():
+                    if str(v._rand_) not in declared:
                         continue
 
-                    if v is not None:
-                        val = model.eval(var(), model_completion=True)
+                    val = model.eval(v._rand_, model_completion=True)
 
-                        if is_fp(val):
-                            bv = model.eval(fpToIEEEBV(val))
-                            cast_values[v._idx_] = bv
-                        elif isinstance(val, IntNumRef| BitVecNumRef):
-                            cast_values[v._idx_] = val.as_long()
-                        else:
-                            cast_values[v._idx_] = val
+                    if is_fp(val):
+                        bv = model.eval(fpToIEEEBV(val))
+                        cast_values[v._idx_] = bv
+                    elif isinstance(val, IntNumRef| BitVecNumRef):
+                        cast_values[v._idx_] = val.as_long()
+                    else:
+                        cast_values[v._idx_] = val
             else:
                 msg = "Failed to randomize\n"
                 if os.environ.get("AVL_CONSTRAINT_DEBUG") is not None:
@@ -687,6 +972,7 @@ class Object:
 
                     if s.check() != sat:
                         core = s.unsat_core()
+                        by_name = {str(x._rand_): x for x in constrained_vars.values()}
                         for t in core:
                             idx = int(str(t)[1:])
                             constraint = assertions[idx]
@@ -694,8 +980,11 @@ class Object:
 
                             msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
                             for v in vars_in_constraint:
-                                var = Var._lookup_[int(v.decl().name())]
-                                msg += f"\t\tVariable {v} == {var._varname_} ({var._file_}:{var._line_}\n"
+                                var = by_name.get(str(v))
+                                if var is None:
+                                    continue
+                                msg += (f"\t\tVariable {v} == {var._varname_} "
+                                        f"({var._file_}:{var._line_})\n")
                 raise Exception(msg)
 
             return cast_values
@@ -719,13 +1008,39 @@ class Object:
 
                 # Create the random / z3 variable
                 # Done only when randomization is called to speed up non-randomized object creation
-                if v._rand_ is None:
-                    v._rand_ = v._z3_()
+                #
+                # The name comes from the variable's position in this solve, so
+                # that the next object of the same shape gets the same z3
+                # variables and can reuse everything built from them.
+                #
+                # Assigned every time rather than once per Var, because the same
+                # Var can appear in more than one randomization - shared between
+                # two objects, or randomized on its own as well - and at a
+                # different position each time. Keeping a stale name would alias
+                # it onto whichever field now holds that position.
+                v._rand_ = v._z3_(v._z3_name_(len(vars) - 1))
 
         var_ids = [v._idx_ for v in vars]
 
-        # Create Solver
+        # Create Solver. The soft constraints are collected as they are asserted,
+        # because Optimize.assertions() reports only the hard ones.
+        static_soft = []
         solver = new_solver()
+
+        # The soft constraints local to the variables, which _apply_constraints_
+        # asserted without reporting back. Rebuilding them here lands on the same
+        # ASTs - z3 hash conses - so they identify the shape just as well. Empty for
+        # anything without variable local soft constraints, which is the usual case.
+        static_soft += [c(v._rand_)
+                        for v in constrained_vars.values()
+                        for c in v._constraints_[False].values()]
+
+        # The hard constraints of this object alone, before anything dynamic is
+        # added. Working the free bits out from these keeps the answer cacheable,
+        # and stays correct when a dynamic constraint narrows things further: that
+        # can only pin more bits, and a clause on an already pinned bit is merely
+        # the wasted effort this removes, never a wrong answer.
+        static_hard = list(solver.assertions())
 
         # Add dynamic constraints
         if hard is not None:
@@ -740,6 +1055,47 @@ class Object:
                 _args = [resolve_arg(a) for a in args]
                 solver.add_soft(fn(*_args), weight=1000)
 
+        # Spread the variables taking part in the solve. Everything else is drawn
+        # directly, below.
+        free_bits, entry = self._free_bits_(static_hard, static_soft, constrained_vars)
+
+        # Which bits each variable is worth a clause on, and - while that is still
+        # being measured - somewhere to note what was asked for. There is nothing
+        # to plan until the free bits are known.
+        #
+        # Dynamic constraints are left out of this entirely. They are absent from
+        # the cache key, so a plan cannot tell one set of them from another or from
+        # none at all - and unlike the pinned bit analysis above, a plan cannot be
+        # carried across regardless. Pinning a bit only ever removes a clause whose
+        # effect was constant; declining to ask about a contested bit changes which
+        # solutions are optimal, so a plan measured under a dynamic constraint
+        # describes a different solve to one without it. Such a solve therefore
+        # neither uses a plan nor teaches one, and asks about every free bit exactly
+        # as it did before plans existed.
+        static_only = not hard and not soft
+        plan = self._clause_plan_(entry, free_bits) if free_bits and static_only else None
+        record = [] if plan is not None and entry["calib"] is not None else None
+
+        for v in constrained_vars.values():
+            rand_id = v._rand_.get_id()
+            bits = free_bits.get(rand_id)
+
+            if plan is not None:
+                chosen = plan.get(rand_id)
+                if chosen is not None:
+                    reliable, contested, k = chosen
+                    # The common case is nothing to ration, and then the plan is
+                    # the free bits themselves - no list built per randomization.
+                    bits = (reliable if not contested
+                            else reliable + random.sample(contested, k))
+
+            if record is None:
+                v._apply_randomization_(solver, bits)
+            else:
+                asked = []
+                v._apply_randomization_(solver, bits, asked)
+                record.append((v, rand_id, asked))
+
         # Add randomization and solve
         solver.push()
         values = cast(solver)
@@ -752,6 +1108,10 @@ class Object:
                 var.value = values[k]
             else:
                 var.value = var._random_value_()
+
+        # Settle the clause budget against what this solve granted.
+        if record is not None:
+            self._settle_plan_(entry, record, values)
 
         # User defined post-randomization function
         self.post_randomize()

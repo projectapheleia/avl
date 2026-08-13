@@ -64,39 +64,76 @@ class Fp16(Var):
         """
         return (-np.finfo(self.value).max, np.finfo(self.value).max)
 
-    def _z3_(self) -> FP:
+    def _z3_(self, name : str) -> FP:
         """
         Get the Z3 representation of the variable.
 
+        :param name: Pooled name to give it - see Var._z3_name_.
+        :type name: str
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FP16)
+        return Var._pooled_z3_(name, lambda: FP(name, FP16))
 
     def _apply_constraints_(self, solver : Optimize) -> None:
         """
         Apply the constraints to the solver.
 
+        Also ties the float to the bit vector holding its IEEE pattern, and rules
+        out NaN and the infinities. Randomization is applied separately, by
+        _apply_randomization_, which draws over that same bit vector.
+
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
         """
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP16
+        solver.add(Not(fpIsNaN(self._rand_)))
+        solver.add(Not(fpIsInf(self._rand_)))
+        solver.add(self._rand_ == fpBVToFP(self._z3_bits_(), FP16))
+
+    def _z3_bits_(self) -> BitVec:
+        """
+        The pooled bit vector holding this variable's IEEE bit pattern.
+
+        Named apart from the FP variable so the two cannot share a pooled entry
+        under different sorts.
+
+        :return: The bit vector.
+        :rtype: BitVec
+        """
+        name = f"{self._rand_}_bits"
+        return Var._pooled_z3_(name, lambda: BitVec(name, self.width))
+
+    def _apply_randomization_(self, solver : Optimize, free_bits : list[int]|None = None,
+                              record : list|None = None) -> None:
+        """
+        Add the soft constraints that spread this variable over its legal values.
+
+        The draw is made over the IEEE bit pattern rather than over the float, and
+        every bit of it gets a clause.
+
+        Object._free_bits_ passes nothing in here, because it skips this variable
+        altogether: it examines only variables whose z3 variable is a bit vector, and
+        this one's is a float. So no free bits are worked out for it, and with no
+        free bits there is no clause plan either.
+
+        :param solver: The optimization solver to apply the constraints to.
+        :type solver: Optimize
+        :param free_bits: Always None here, see above.
+        :type free_bits: list[int], optional
+        :param record: Ignored - with no clause plan to settle there is nothing to
+            record.
+        :type record: list, optional
+        """
+        bv = self._z3_bits_()
 
         # All the bits come from a single getrandbits call - one randint per bit
         # is an order of magnitude more expensive for no extra randomness.
         bits = random.getrandbits(self.width)
         for b in range(self.width):
             solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
-
-        solver.add(Not(fpIsNaN(self._rand_)))
-        solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
 
     def _random_value_(self, bounds: tuple[float, float]|None = None) -> np.float16:
         """
@@ -205,39 +242,35 @@ class Fp32(Fp16):
                 return np.frombuffer(struct.pack("I", v.as_long()), dtype=np.float32)[0]
             return np.float32(v)
 
-    def _z3_(self) -> FP:
+    def _z3_(self, name : str) -> FP:
         """
         Get the Z3 representation of the variable.
 
+        :param name: Pooled name to give it - see Var._z3_name_.
+        :type name: str
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FP32)
+        return Var._pooled_z3_(name, lambda: FP(name, FP32))
 
     def _apply_constraints_(self, solver : Optimize) -> None:
         """
         Apply the constraints to the solver.
 
+        Also ties the float to the bit vector holding its IEEE pattern, and rules
+        out NaN and the infinities. Randomization is applied separately, by
+        _apply_randomization_, which draws over that same bit vector.
+
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
         """
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP32
-
-        # All the bits come from a single getrandbits call - one randint per bit
-        # is an order of magnitude more expensive for no extra randomness.
-        bits = random.getrandbits(self.width)
-        for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
-
         solver.add(Not(fpIsNaN(self._rand_)))
         solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
+        solver.add(self._rand_ == fpBVToFP(self._z3_bits_(), FP32))
+
 
 class Fp64(Fp16):
     def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
@@ -281,39 +314,35 @@ class Fp64(Fp16):
         """
         return (-1e100, 1e100) # Reduced to allow randomization
 
-    def _z3_(self) -> FP:
+    def _z3_(self, name : str) -> FP:
         """
         Get the Z3 representation of the variable.
 
+        :param name: Pooled name to give it - see Var._z3_name_.
+        :type name: str
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FPSort(11,53))
+        return Var._pooled_z3_(name, lambda: FP(name, FP64))
 
     def _apply_constraints_(self, solver : Optimize) -> None:
         """
         Apply the constraints to the solver.
 
+        Also ties the float to the bit vector holding its IEEE pattern, and rules
+        out NaN and the infinities. Randomization is applied separately, by
+        _apply_randomization_, which draws over that same bit vector.
+
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
         """
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP64
-
-        # All the bits come from a single getrandbits call - one randint per bit
-        # is an order of magnitude more expensive for no extra randomness.
-        bits = random.getrandbits(self.width)
-        for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == ((bits >> b) & 1), weight=100)
-
         solver.add(Not(fpIsNaN(self._rand_)))
         solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
+        solver.add(self._rand_ == fpBVToFP(self._z3_bits_(), FP64))
+
 
 Half = Fp16
 Float = Fp32

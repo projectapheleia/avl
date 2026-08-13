@@ -121,18 +121,26 @@ class Enum(Logic):
         """
         return (min(self.values.values()), max(self.values.values()))
 
-    def _z3_(self) -> BitVec:
+    def _z3_(self, name : str) -> BitVec:
         """
         Return the Z3 representation of the variable.
+
+        :param name: Pooled name to give it - see Var._z3_name_.
+        :type name: str
         :return: The Z3 representation of the variable.
         :rtype: BoolRef | IntNumRef | BitVecNumRef | RatNumRef
         """
-        self.add_constraint(
-            "_c_range_",
-            lambda x: Or([x == v for v in self.values.values()]),
-            hard=True,
-        )
-        return super()._z3_()
+        # _z3_ is called on every randomization, because a variable's pooled name
+        # depends on where it sits in the solve and that can differ from one
+        # randomization to the next. Adding the range constraint again would warn
+        # about overriding itself.
+        if "_c_range_" not in self._constraints_[True]:
+            self.add_constraint(
+                "_c_range_",
+                lambda x: Or([x == v for v in self.values.values()]),
+                hard=True,
+            )
+        return super()._z3_(name)
 
     # Type Conversions
     def __str__(self) -> str:

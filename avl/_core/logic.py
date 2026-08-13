@@ -17,6 +17,14 @@ from .var import Var
 
 class Logic(Var):
 
+    # (pooled z3 variable's AST id, bit, value) -> the clause asking that bit to
+    # take that value. Building these was around a third of the cost of
+    # randomizing a wide object; pooling them alongside the z3 variables makes
+    # them reusable by the next object of the same shape. The pooled variables
+    # are held for the life of the process by Var._z3_pool_, so an AST id cannot
+    # be recycled underneath a key.
+    _bit_clause_pool_: dict = {}
+
     def __copy__(self):
         """
         Copy the Logic - always make a copy to ensure randomness is preserved.
@@ -88,33 +96,65 @@ class Logic(Var):
         """
         return (0, (1 << self.width) - 1)
 
-    def _z3_(self) -> BitVecRef:
+    def _z3_name_(self, ordinal : int) -> str:
+        """
+        The pooled name for a variable at this position in a solve.
+
+        The width is what makes a bit vector's sort, and one Logic class covers
+        every width, so the name carries the width rather than the class name.
+
+        :param ordinal: Position of the variable within the randomization.
+        :type ordinal: int
+        :return: The name.
+        :rtype: str
+        """
+        return f"v{ordinal}_l{self.width}"
+
+    def _z3_(self, name : str) -> BitVecRef:
         """
         Get the Z3 representation of the variable.
 
+        :param name: Pooled name to give it - see Var._z3_name_.
+        :type name: str
         :return: The Z3 BitVec representation of the variable.
         :rtype: z3.BitVecRef
         """
-        return BitVec(f"{self._idx_}", self.width)
+        return Var._pooled_z3_(name, lambda: BitVec(name, self.width))
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_randomization_(self, solver : Optimize, free_bits : list[int]|None = None,
+                              record : list|None = None) -> None:
         """
-        Apply the constraints to the solver.
+        Add the soft constraints that spread this variable over its legal values.
+
+        Each bit is asked, softly, to match a random draw. The solver satisfies as
+        many of those as the hard constraints allow, and that is what spreads the
+        result, rather than returning whichever legal value the solver finds first.
 
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
+        :param free_bits: The bits to constrain. None means every bit. A bit the
+            hard constraints pin to a single value is not worth one - see
+            Object._free_bits_ - and nor is one they will not grant alongside the
+            rest - see Object._clause_plan_.
+        :type free_bits: list[int], optional
+        :param record: When given, the (bit, value) pairs asked for are appended to
+            it, so the clause plan can be settled against what the solver grants.
+        :type record: list, optional
         """
-
-        super()._apply_constraints_(solver)
-
-        # Add soft constraint randomizing each bit. All the bits come from a
-        # single getrandbits call - one randint per bit is an order of
-        # magnitude more expensive for no extra randomness.
+        # All the bits come from a single getrandbits call - one randint per bit
+        # is an order of magnitude more expensive for no extra randomness.
         bits = random.getrandbits(self.width)
-        for b in range(self.width):
-            solver.add_soft(Extract(b,b,self._rand_) == ((bits >> b) & 1), weight=100)
+        pool = Logic._bit_clause_pool_
+        rand_id = self._rand_.get_id()
+        for b in (range(self.width) if free_bits is None else free_bits):
+            value = (bits >> b) & 1
+            clause = pool.get((rand_id, b, value))
+            if clause is None:
+                clause = Extract(b, b, self._rand_) == value
+                pool[(rand_id, b, value)] = clause
+            solver.add_soft(clause, weight=100)
+            if record is not None:
+                record.append((b, value))
 
     def __getitem__(self, key):
         if isinstance(key, slice):

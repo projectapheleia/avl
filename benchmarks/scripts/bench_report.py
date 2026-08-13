@@ -27,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import bench_html  # noqa: E402
+import bench_quality  # noqa: E402
 
 try:
     from tabulate import tabulate
@@ -150,6 +151,11 @@ def main() -> int:
     parser.add_argument("csv", nargs="*", type=Path, help="results.csv files to aggregate")
     parser.add_argument("--output", type=Path, default=None, help="Directory to write reports to")
     parser.add_argument("--title", default="AVL Benchmark Results", help="Report title")
+    parser.add_argument("--quality", nargs="*", type=Path, default=[],
+                        help="quality.csv dumps of drawn values, from the quality runs")
+    parser.add_argument("--quality-check", default="none",
+                        help="Flavours whose randomization quality must meet the thresholds, "
+                             "or 'none' to report without failing (default: none)")
     args = parser.parse_args()
 
     paths = [p for p in args.csv if p.exists() and p.stat().st_size > 0]
@@ -162,6 +168,12 @@ def main() -> int:
     nets = net_metrics(summary)
     raws = raw_metrics(summary)
 
+    # How well spread the randomization was, alongside how fast it was. Absent
+    # unless the quality runs have been done.
+    dumps = [p for p in args.quality if p.exists() and p.stat().st_size > 0]
+    quality = bench_quality.measure(dumps) if dumps else []
+    quality_by_flavour = bench_quality.by_flavour(quality) if quality else []
+
     print()
     print(f"{args.title} - cost of randomization, harness subtracted")
     print(render(NET_HEADERS, net_table(nets)))
@@ -169,6 +181,12 @@ def main() -> int:
     print("As measured, including simulator and interpreter startup")
     print(render(RAW_HEADERS, raw_table(raws)))
     print()
+
+    if quality:
+        print("Quality of randomization - entropy 1.00 is a flat spread, bit skew 0.00 agrees "
+              "with the other flavours")
+        print(render(bench_quality.HEADERS, bench_quality.table(quality)))
+        print()
 
     if args.output is not None:
         args.output.mkdir(parents=True, exist_ok=True)
@@ -194,14 +212,43 @@ def main() -> int:
             render(RAW_HEADERS, raw_table(raws)),
             "",
         ]
+        if quality:
+            markdown += [
+                "## Quality of randomization",
+                "",
+                "Measured on a separate untimed run. `entropy` 1.00 is a flat spread across every",
+                "value any flavour drew for that field; `bit skew` 0.00 agrees with the other",
+                "flavours on how often each bit was set. A cheaper randomization buys its speed",
+                "here, where a timing measurement cannot see it.",
+                "",
+                render(bench_quality.HEADERS, bench_quality.table(quality)),
+                "",
+            ]
         (args.output / "summary.md").write_text("\n".join(markdown))
 
+        if quality:
+            with open(args.output / "quality.csv", "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(bench_quality.HEADERS)
+                writer.writerows(bench_quality.table(quality))
+
         (args.output / "report.html").write_text(
-            bench_html.render(args.title, nets, raws, rows)
+            bench_html.render(args.title, nets, raws, rows, quality, quality_by_flavour)
         )
 
         print(f"Wrote {args.output / 'summary.csv'}, {args.output / 'summary.md'} "
               f"and {args.output / 'report.html'}")
+
+    checked = [f.strip() for f in args.quality_check.split(",") if f.strip()]
+    if quality and checked and checked != ["none"]:
+        breaches = bench_quality.failures(quality_by_flavour, checked,
+                                          bench_quality.ENTROPY_TOLERANCE,
+                                          bench_quality.BIT_SKEW_CEILING)
+        if breaches:
+            print(f"Randomization quality regressed for {args.quality_check}:", file=sys.stderr)
+            for breach in breaches:
+                print(f"  {breach}", file=sys.stderr)
+            return 1
 
     return 0
 

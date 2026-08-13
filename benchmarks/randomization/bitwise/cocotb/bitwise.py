@@ -19,12 +19,16 @@ import os
 
 import avl
 import cocotb
+from bench_dump import dump_path, write_dump
 from cocotb.clock import Clock
 from cocotb.triggers import RisingEdge
 from z3 import And, Extract, LShR
 
 CLOCK_PERIOD_NS = 1
 RESET_CYCLES = 5
+
+# Fields recorded by the quality run.
+FIELDS = [("a", 32), ("b", 32), ("c", 32), ("d", 32)]
 
 
 class bitwise_item(avl.Object):
@@ -73,7 +77,11 @@ async def test(dut):
         await RisingEdge(dut.clk)
     dut.rst_n.value = 1
 
-    item = bitwise_item("item")
+    # Only the quality run dumps, and only for the flavour randomizing here -
+    # the sv flavour records its own draws from the RTL.
+    dump = dump_path() if flavour == "avl" else None
+    samples = [] if dump else None
+
     checksum = 0
     count = 0
 
@@ -82,6 +90,10 @@ async def test(dut):
 
         if flavour == "avl" and enable:
             for _ in range(burst):
+                # A fresh item per randomization, the way a testbench builds a
+                # fresh sequence item per transaction, rather than one item
+                # reused - which would let a solver amortize work across draws.
+                item = bitwise_item("item")
                 item.randomize()
 
                 a, b, c, d = int(item.a), int(item.b), int(item.c), int(item.d)
@@ -93,6 +105,9 @@ async def test(dut):
                     f"c_d violated : d={d:08x}"
                 )
 
+                if samples is not None:
+                    samples.append((a, b, c, d))
+
                 checksum += a + b + c + d
                 count += 1
 
@@ -101,6 +116,9 @@ async def test(dut):
     assert int(dut.cycles.value) >= edges - 1, (
         f"harness ran {int(dut.cycles.value)} cycles, expected at least {edges - 1}"
     )
+
+    if samples is not None:
+        write_dump(dump, FIELDS, samples)
 
     if flavour == "avl":
         print(f"BENCH_RESULT flavour=avl iterations={count} checksum={checksum}")
