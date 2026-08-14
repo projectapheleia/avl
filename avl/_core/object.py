@@ -926,9 +926,11 @@ class Object:
                     _args = [resolve_arg(a) for a in args]
                     add_fn(fn(*_args))
 
-            # Find constraints local to variables
+            # Find constraints local to variables. A variable that was never
+            # constrained carries None rather than a pair of empty dictionaries -
+            # see Var's class attributes.
             for v in vars:
-                if any(v._constraints_.values()):
+                if v._constraints_ is not None and any(v._constraints_.values()):
                     constrained_vars[v._idx_] = v
 
             # Apply constraints local to variables
@@ -1003,8 +1005,15 @@ class Object:
                 _var_finder_(value, memo, conversion)
 
         for v in conversion.values():
-            if Var._lookup_[v._idx_]._auto_random_:
-                vars.append(Var._lookup_[v._idx_])
+            if v._auto_random_:
+                # Give the variable its index in Var._lookup_. A variable is not
+                # given one when it is built, because a solve is the only thing
+                # that reads it - see Var._register_. The values below are keyed
+                # by it, so it has to exist before the solve, and the variable it
+                # names is this one: the finder above was asked for the variables
+                # themselves rather than copies of them.
+                v._register_()
+                vars.append(v)
 
                 # Create the random / z3 variable
                 # Done only when randomization is called to speed up non-randomized object creation
@@ -1033,6 +1042,7 @@ class Object:
         # anything without variable local soft constraints, which is the usual case.
         static_soft += [c(v._rand_)
                         for v in constrained_vars.values()
+                        if v._constraints_ is not None
                         for c in v._constraints_[False].values()]
 
         # The hard constraints of this object alone, before anything dynamic is
@@ -1101,11 +1111,12 @@ class Object:
         values = cast(solver)
         solver.pop()
 
-        # Assign values to Var objects - only for those within this class
-        for k in var_ids:
-            var = Var._lookup_[k]
-            if k in values:
-                var.value = values[k]
+        # Assign values to Var objects - only for those within this class. The
+        # variables are already in hand, so they are taken from there rather than
+        # looked up by index in Var._lookup_, which would return these same ones.
+        for var in vars:
+            if var._idx_ in values:
+                var.value = values[var._idx_]
             else:
                 var.value = var._random_value_()
 

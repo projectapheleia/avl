@@ -55,6 +55,7 @@ FIELDS = [
     "flavour",
     "tool",
     "phase",
+    "unit",
     "iterations",
     "repeat",
     "real_s",
@@ -328,7 +329,10 @@ def main() -> int:
                         help="Testbench flavour (sv / avl / pyuvm)")
     parser.add_argument("--tool", default="unknown", help="Tool used to run the testbench")
     parser.add_argument("--phase", default="run", help="Phase being measured (run / baseline)")
-    parser.add_argument("--iterations", type=int, default=0, help="Randomizations per run")
+    parser.add_argument("--unit", default="randomization",
+                        help="What one iteration of this benchmark is, in the singular - the "
+                             "word the report is written in")
+    parser.add_argument("--iterations", type=int, default=0, help="Iterations per run")
     parser.add_argument("--repeats", type=int, default=1, help="Number of times to run the command")
     parser.add_argument("--warmup", type=int, default=0, help="Untimed runs before measuring")
     parser.add_argument("--interval", type=float, default=0.02, help="Sample interval in seconds")
@@ -368,6 +372,7 @@ def main() -> int:
                 "flavour": args.flavour,
                 "tool": args.tool,
                 "phase": args.phase,
+                "unit": args.unit,
                 "iterations": args.iterations,
                 "repeat": repeat,
                 **result,

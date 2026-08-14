@@ -7,16 +7,17 @@
 # <benchmark>/<flavour>/Makefile - the directory name is the flavour.
 #
 # Every flavour is built and run exactly the same way, through cocotb, from the
-# same RTL. The flavour changes where the randomization happens and nothing
+# same RTL. The flavour changes where the work under test happens and nothing
 # else:
 #
-#   sv     +define+BENCH_SV_RANDOMIZE, so the RTL randomizes with SystemVerilog
-#          classes and constraints, solved by the simulator
-#   avl    no define, so the cocotb testbench randomizes the identical object
+#   sv     +define+BENCH_SV, so the RTL does the work in SystemVerilog - a class
+#          randomized by the simulator's solver, or an object built and driven
+#          onto the signals from inside the module
+#   avl    no define, so the cocotb testbench does it on the identical object
 #          with AVL instead
 #   pyuvm  no define either, and the same RTL, but the testbench is the pyuvm
-#          one - the identical object as a pyvsc randobj, randomized from the
-#          run_phase of a pyuvm test
+#          one - working on the same object from the run_phase of a pyuvm test,
+#          with pyvsc where it has to be randomized
 #
 # Because the flow is cocotb's, any simulator cocotb supports can be used:
 #
@@ -27,30 +28,35 @@ include $(patsubst %/,%,$(dir $(realpath $(firstword $(MAKEFILE_LIST)))))/common
 SIM                  ?= verilator
 BENCH_TOOL           := $(SIM)
 
-# Sources are shared by every flavour of the benchmark.
-VERILOG_SOURCES      += $(sort $(wildcard $(BENCH_DIR)/rtl/*.sv))
-VERILOG_INCLUDE_DIRS += $(BENCH_DIR)/rtl
+# Sources are shared by every flavour of the benchmark, and - where a group of
+# benchmarks differs only in configuration - by every benchmark in the group.
+# See BENCH_SOURCE_DIR in common.mk.
+VERILOG_SOURCES      += $(sort $(wildcard $(BENCH_SOURCE_DIR)/rtl/*.sv))
+VERILOG_INCLUDE_DIRS += $(BENCH_SOURCE_DIR)/rtl
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
-TOPLEVEL             := $(notdir $(BENCH_DIR))_bench
+TOPLEVEL             ?= $(notdir $(BENCH_SOURCE_DIR))_bench
 TOPLEVEL_LANG        ?= verilog
 # The testbenches import bench_dump from scripts/ for the quality run.
-PYTHONPATH           := $(BENCH_DIR)/cocotb:$(BENCH_ROOT)/scripts
+PYTHONPATH           := $(BENCH_SOURCE_DIR)/cocotb:$(BENCH_ROOT)/scripts
 
 # MODULE is the basename of the Python test file(s). The sv and avl flavours
 # share one testbench - the loop is common and only the randomization is under
 # an if. pyuvm brings its own, because the loop has to live inside a uvm test.
 ifeq ($(FLAVOUR),pyuvm)
-MODULE               ?= $(notdir $(BENCH_DIR))_pyuvm
+MODULE               ?= $(notdir $(BENCH_SOURCE_DIR))_pyuvm
 else
-MODULE               ?= $(notdir $(BENCH_DIR))
+MODULE               ?= $(notdir $(BENCH_SOURCE_DIR))
 endif
 
 export PYTHONPATH
 export BENCH_FLAVOUR := $(FLAVOUR)
 
+# BENCH_SV_RANDOMIZE is the older name, kept because the randomization
+# benchmarks are written against it. BENCH_SV says the same thing without
+# claiming that what the RTL does under it is randomization.
 ifeq ($(FLAVOUR),sv)
-COMPILE_ARGS         += +define+BENCH_SV_RANDOMIZE
+COMPILE_ARGS         += +define+BENCH_SV_RANDOMIZE +define+BENCH_SV
 endif
 
 # Seed the simulator's constraint solver. AVL is seeded through cocotb, which
@@ -84,12 +90,15 @@ COCOTB_RUN            = env MAKEFLAGS= \
                           BENCH_ITERATIONS=$(ITERATIONS) \
                           BENCH_BURST=$(BURST) \
                           BENCH_RANDOMIZE=$(1) \
+                          $(BENCH_ENV) \
                           $(MAKE) --no-print-directory -C $(CURDIR) sim \
                             COCOTB_PLUSARGS="+randomize=$(1) +burst=$(BURST) $(BENCH_PLUSARGS)"
 
 .PHONY: bench build warm baseline run quality
 
-bench: build warm baseline run quality
+# A benchmark that does not randomize has no quality to measure - see
+# BENCH_QUALITY in common.mk.
+bench: build warm baseline run $(if $(filter-out 0,$(BENCH_QUALITY)),quality)
 
 # Elaborate and compile the model, outside the measurement.
 build:
@@ -120,6 +129,9 @@ run: build
 # written somewhere and that must not show up in a measurement. Runs last so it
 # cannot perturb them either.
 quality: build
+ifeq ($(BENCH_QUALITY),0)
+	@echo "  $(FLAVOUR)  quality   nothing is randomized here - not measured"
+else
 	@rm -f $(QUALITY_DUMP)
 	@env MAKEFLAGS= \
 	   COCOTB_RANDOM_SEED=$(SEED) \
@@ -127,6 +139,7 @@ quality: build
 	   BENCH_BURST=1 \
 	   BENCH_RANDOMIZE=1 \
 	   BENCH_DUMP=$(QUALITY_DUMP) \
+	   $(BENCH_ENV) \
 	   $(MAKE) --no-print-directory -C $(CURDIR) sim \
 	     COCOTB_PLUSARGS="+randomize=1 +burst=1 +dump=$(QUALITY_DUMP) $(BENCH_PLUSARGS)" \
 	   > $(CURDIR)/quality.log 2>&1 || \
@@ -134,7 +147,8 @@ quality: build
 	@test -s $(QUALITY_DUMP) || \
 	  { echo "  $(FLAVOUR)  quality recorded nothing - see $(CURDIR)/quality.log"; exit 1; }
 	@echo "  $(FLAVOUR)  quality   $(QUALITY_ITERATIONS) draws recorded"
+endif
 
 clean::
-	rm -rf $(BENCH_DIR)/cocotb/__pycache__/
+	rm -rf $(BENCH_SOURCE_DIR)/cocotb/__pycache__/
 	rm -f *.log *.xml quality.csv

@@ -59,7 +59,7 @@ fix = false
 [tool.ruff.per-file-ignores]
 # A pyvsc constraint block is a series of bare comparisons - the expression is
 # the constraint, and there is nothing to return.
-"benchmarks/randomization/*/cocotb/*_pyuvm.py" = ["B015"]
+"benchmarks/**/cocotb/*_pyuvm.py" = ["B015"]
 
 [tool.ruff.mccabe]
 max-complexity = 40

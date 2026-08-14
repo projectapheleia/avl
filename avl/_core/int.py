@@ -21,33 +21,9 @@ class Int(Uint):
         :rtype: Var
         """
         new_obj = Int(self.value, auto_random=self._auto_random_, fmt=self._fmt_, width=self.width)
-        new_obj._constraints_ = {
-            k: v.copy() for k, v in self._constraints_.items()
-        }
+        new_obj._constraints_ = self._copied_constraints_()
         new_obj.__class__ = self.__class__
         return  new_obj
-
-    def __init__(
-        self,
-        *args,
-        auto_random: bool = True,
-        fmt: Callable[..., str] = str,
-        width: int = 32
-    ) -> None:
-        """
-        Initialize an instance of the class.
-
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        :param width: The width of the variable in bits, defaults to 32.
-        :type width: int, optional
-        :raises ValueError: If the width is not a positive integer.
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=width)
 
     def _cast_(self, other: Any) -> int:
         """

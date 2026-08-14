@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Callable
 from typing import Any
 
 from z3 import BitVec, BitVecRef, Extract, Optimize
@@ -16,6 +15,17 @@ from .var import Var
 
 
 class Logic(Var):
+
+    # Width, and the mask derived from it, for a Logic given no width of its own.
+    # The two must always agree - see Var.__init__, which is where an explicit
+    # width sets both. Logic defines no __init__ of its own, so that building one
+    # costs a single constructor frame; the class attributes are what a level of
+    # the hierarchy contributes instead.
+    width = 32
+    _mask_ = (1 << 32) - 1
+
+    # Logic prints as hex where Var prints as str.
+    _fmt_default_ = hex
 
     # (pooled z3 variable's AST id, bit, value) -> the clause asking that bit to
     # take that value. Building these was around a third of the cost of
@@ -33,36 +43,8 @@ class Logic(Var):
         :rtype: Var
         """
         new_obj = Logic(self.value, auto_random=self._auto_random_, fmt=self._fmt_, width=self.width)
-        new_obj._constraints_ = {
-            k: v.copy() for k, v in self._constraints_.items()
-        }
+        new_obj._constraints_ = self._copied_constraints_()
         return  new_obj
-
-    def __init__(
-        self,
-        *args,
-        auto_random: bool = True,
-        fmt: Callable[..., str] = hex,
-        width: int = 32
-    ) -> None:
-        """
-        Initialize an instance of the class.
-
-        :param value: The initial value of the variable.
-        :type value: any
-        :param auto_random: Indicates if the variable should be automatically randomized, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format of the variable, defaults to hex.
-        :type fmt: type, optional
-        :param width: The width of the variable in bits, defaults to 32.
-        :type width: int, optional
-        :raises ValueError: If the width is not a positive integer.
-        """
-        if not isinstance(width, int) or width <= 0:
-            raise ValueError("Width must be a positive integer.")
-        self.width = int(width)
-
-        super().__init__(*args, auto_random=auto_random, fmt=fmt)
 
     def _cast_(self, other: Any) -> int:
         """
@@ -74,7 +56,9 @@ class Logic(Var):
         :rtype: int
         """
         v = other.value if isinstance(other, Logic) else other
-        return int(v) & self._range_()[1]
+        # Against the kept mask rather than _range_(), which would rebuild it on
+        # every assignment.
+        return int(v) & self._mask_
 
     def _wrap_(self, result : Any) -> Logic:
         """
@@ -94,7 +78,7 @@ class Logic(Var):
         :return: A tuple containing the minimum and maximum values.
         :rtype: tuple[int, int]
         """
-        return (0, (1 << self.width) - 1)
+        return (0, self._mask_)
 
     def _z3_name_(self, ordinal : int) -> str:
         """

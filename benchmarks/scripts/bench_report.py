@@ -36,11 +36,108 @@ except ImportError:  # pragma: no cover - tabulate ships with avl
 
 METRICS = ["real_s", "user_s", "sys_s", "cpu_pct", "max_rss_kb"]
 
-NET_HEADERS = ["benchmark", "flavour", "sim", "iters", "real (s)", "user (s)", "sys (s)",
-               "cpu (%)", "us/rand", "relative", "harness (s)"]
-
 RAW_HEADERS = ["benchmark", "flavour", "sim", "phase", "iters", "runs", "real (s)", "user (s)",
                "sys (s)", "cpu (%)", "rss (MB)", "failed"]
+
+# What a benchmark measures, in the words its report is written in. Each
+# testbench records which of these it is timing, as the "unit" column of
+# results.csv - see bench_time.py - so an aggregate report over a mixed set of
+# benchmarks can fall back to the neutral wording rather than claim they all
+# measure the same thing.
+#
+# singular / plural / short  the unit itself, "short" for a narrow column heading
+# cost                       what the measurement is the cost of
+# isolates                   what is left once the harness has been subtracted
+# differs                    what changes from one flavour to the next
+PROFILES = {
+    "randomization": {
+        "singular": "randomization",
+        "plural": "randomizations",
+        "short": "rand",
+        "cost": "cost of randomization",
+        "isolates": "the solver",
+        "differs":
+            "Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
+            "harness</b>, which drives clock and reset and randomizes once per rising edge. The "
+            "only difference is where the randomization happens: the <b>sv</b> flavour randomizes "
+            "inside the RTL with SystemVerilog classes and constraints solved by the simulator, "
+            "the <b>avl</b> flavour randomizes the identical object from Python with AVL, and the "
+            "<b>pyuvm</b> flavour randomizes it again as a pyvsc randobj, from the run_phase of a "
+            "pyuvm test. Everything else - the simulator, the elaboration, the clock, the loop - "
+            "is common.",
+    },
+    "item": {
+        "singular": "item",
+        "plural": "items",
+        "short": "item",
+        "cost": "cost of building and sending an item",
+        "isolates": "item creation and signal driving",
+        "differs":
+            "Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
+            "harness</b>, which drives clock and reset and builds and sends one item per rising "
+            "edge. Nothing is randomized. The only difference is who builds and sends it: the "
+            "<b>sv</b> flavour builds a SystemVerilog object inside the RTL and assigns its "
+            "fields to the signals directly, the <b>avl</b> flavour builds an AVL sequence item "
+            "in the cocotb testbench and writes the same signals through the simulator's "
+            "programming interface, and the <b>pyuvm</b> flavour builds a uvm_sequence_item and "
+            "writes them the same way, from the run_phase of a pyuvm test. Everything else - the "
+            "simulator, the elaboration, the clock, the loop - is common.",
+    },
+    "transaction": {
+        "singular": "transaction",
+        "plural": "transactions",
+        "short": "txn",
+        "cost": "cost of a transaction",
+        "isolates": "solving the item and driving it",
+        "differs":
+            "Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
+            "harness</b>, which drives clock and reset and builds, randomizes and sends one item "
+            "per rising edge. The only difference is who does that: the <b>sv</b> flavour builds a "
+            "SystemVerilog object inside the RTL, has the simulator solve its constraints and "
+            "assigns the result to the signals directly, the <b>avl</b> flavour builds and solves "
+            "the identical object in the cocotb testbench with AVL and writes the same signals "
+            "through the simulator's programming interface, and the <b>pyuvm</b> flavour does it "
+            "again as a pyvsc randobj, from the run_phase of a pyuvm test. Everything else - the "
+            "simulator, the elaboration, the clock, the loop - is common. This is both halves of "
+            "the tree in one figure, and the solve is the larger part of it by some way.",
+    },
+}
+
+# Benchmarks that measure different things, reported together.
+MIXED = {
+    "singular": "operation",
+    "plural": "operations",
+    "short": "op",
+    "cost": "cost of the work under test",
+    "isolates": "the work under test",
+    "differs":
+        "Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
+        "harness</b>, which drives clock and reset and performs one operation per rising edge. "
+        "The only difference is which implementation performs it - <b>sv</b> inside the RTL, "
+        "<b>avl</b> from the cocotb testbench, <b>pyuvm</b> from the run_phase of a pyuvm test. "
+        "Everything else - the simulator, the elaboration, the clock, the loop - is common. The "
+        "benchmarks below do not all measure the same operation, so each is comparable across "
+        "flavours rather than against another benchmark.",
+}
+
+
+def profile_of(rows: list[dict]) -> dict:
+    """The wording for what these rows measured.
+
+    A single unit is described in its own terms; a mixed set is described
+    neutrally, because nothing here can compare one to another.
+    """
+    units = {row.get("unit") or "randomization" for row in rows}
+    if len(units) != 1:
+        return MIXED
+
+    unit = units.pop()
+    return PROFILES.get(unit, {**MIXED, "singular": unit, "plural": f"{unit}s", "short": unit})
+
+
+def net_headers(profile: dict) -> list[str]:
+    return ["benchmark", "flavour", "sim", "iters", "real (s)", "user (s)", "sys (s)",
+            "cpu (%)", f"us/{profile['short']}", "relative", "harness (s)"]
 
 
 def read(paths: list[Path]) -> list[dict]:
@@ -168,6 +265,10 @@ def main() -> int:
     nets = net_metrics(summary)
     raws = raw_metrics(summary)
 
+    # The words this report is written in - see PROFILES.
+    profile = profile_of(rows)
+    headers = net_headers(profile)
+
     # How well spread the randomization was, alongside how fast it was. Absent
     # unless the quality runs have been done.
     dumps = [p for p in args.quality if p.exists() and p.stat().st_size > 0]
@@ -175,8 +276,8 @@ def main() -> int:
     quality_by_flavour = bench_quality.by_flavour(quality) if quality else []
 
     print()
-    print(f"{args.title} - cost of randomization, harness subtracted")
-    print(render(NET_HEADERS, net_table(nets)))
+    print(f"{args.title} - {profile['cost']}, harness subtracted")
+    print(render(headers, net_table(nets)))
     print()
     print("As measured, including simulator and interpreter startup")
     print(render(RAW_HEADERS, raw_table(raws)))
@@ -193,19 +294,19 @@ def main() -> int:
 
         with open(args.output / "summary.csv", "w", newline="") as f:
             writer = csv.writer(f)
-            writer.writerow(NET_HEADERS)
+            writer.writerow(headers)
             writer.writerows(net_table(nets))
 
         markdown = [
             f"# {args.title}",
             "",
-            "## Cost of randomization",
+            f"## {profile['cost'][0].upper()}{profile['cost'][1:]}",
             "",
-            "Both flavours compile the same RTL and run the same cocotb testbench. The harness -",
+            "Every flavour compiles the same RTL and runs the same cocotb testbench. The harness -",
             "startup, elaboration, cocotb bringup and the loop itself - has been subtracted using a",
-            "baseline run of the same testbench with randomization disabled.",
+            "baseline run of the same testbench with the work under test disabled.",
             "",
-            render(NET_HEADERS, net_table(nets)),
+            render(headers, net_table(nets)),
             "",
             "## As measured",
             "",
@@ -226,14 +327,19 @@ def main() -> int:
             ]
         (args.output / "summary.md").write_text("\n".join(markdown))
 
+        # Named apart from the per flavour quality.csv dumps this was measured
+        # from, which sit one directory up in <benchmark>/<flavour>/ - the report
+        # is run over a glob of those, and would otherwise be handed its own
+        # output to read back as if it were a dump of drawn values.
         if quality:
-            with open(args.output / "quality.csv", "w", newline="") as f:
+            with open(args.output / "quality_summary.csv", "w", newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(bench_quality.HEADERS)
                 writer.writerows(bench_quality.table(quality))
 
         (args.output / "report.html").write_text(
-            bench_html.render(args.title, nets, raws, rows, quality, quality_by_flavour)
+            bench_html.render(args.title, nets, raws, rows, quality, quality_by_flavour,
+                              profile)
         )
 
         print(f"Wrote {args.output / 'summary.csv'}, {args.output / 'summary.md'} "

@@ -25,6 +25,31 @@ class Var:
     _lookup_ = weakref.WeakValueDictionary()
     _AVL_CONSTRAINT_DEBUG_ = os.environ.get("AVL_CONSTRAINT_DEBUG") is not None
 
+    # Defaults that an instance does not store for itself. A testbench builds a
+    # fresh item per transaction, and an item is a field object per field, so
+    # anything stored here rather than in __init__ is one store fewer per field
+    # per transaction - which is most of what building an item costs. See
+    # benchmarks/create_and_send. Each reads through the class until something
+    # gives the instance its own:
+    #
+    #   _constraints_   created by add_constraint, on the fields that get one
+    #   _idx_           assigned by _register_, when a solve first needs it
+    #   _rand_          assigned per randomization
+    #   _file_ etc.     only recorded under AVL_CONSTRAINT_DEBUG
+    #   width, _mask_   set by __init__ where a width was given, and otherwise
+    #                   the fixed width of the class - see Logic
+    _constraints_ = None
+    _rand_ = None
+    _idx_ = -1
+    _file_ = None
+    _line_ = None
+    _varname_ = None
+    name = "**deprecated**"
+
+    # The format applied when a variable is given none. Per class, because Logic
+    # prints as hex where everything else prints as str.
+    _fmt_default_ = str
+
     # z3 variables are pooled by their sort and their position in the solve,
     # rather than created one per Var instance. A testbench builds a fresh item
     # per transaction, so anything derived from a per instance z3 variable - the
@@ -54,11 +79,23 @@ class Var:
             Var._z3_pool_[name] = variable
         return variable
 
-    @staticmethod
-    def _register_(new_var : Var) -> None:
-        Var._lookup_[Var._count_] = new_var
-        new_var._idx_ = Var._count_
-        Var._count_ += 1
+    def _register_(self) -> int:
+        """
+        Give this variable its index in Var._lookup_, if it has not got one.
+
+        Only a randomization reads _idx_ and _lookup_, and only for the variables
+        taking part in the solve, so an index is handed out on first use rather
+        than to every variable that is ever built. Idempotent, so a variable
+        randomized repeatedly keeps the index it was given.
+
+        :return: The index of this variable.
+        :rtype: int
+        """
+        if self._idx_ < 0:
+            Var._lookup_[Var._count_] = self
+            self._idx_ = Var._count_
+            Var._count_ += 1
+        return self._idx_
 
     def __copy__(self) -> Var:
         """
@@ -68,10 +105,22 @@ class Var:
         :rtype: Var
         """
         new_obj = self.__class__(self.value, auto_random=self._auto_random_, fmt=self._fmt_)
-        new_obj._constraints_ = {
-            k: v.copy() for k, v in self._constraints_.items()
-        }
+        new_obj._constraints_ = self._copied_constraints_()
         return  new_obj
+
+    def _copied_constraints_(self) -> dict|None:
+        """
+        This variable's constraints, for a copy of it to take over.
+
+        None where the variable has none, which is what a variable that was never
+        constrained carries - see the class attributes above.
+
+        :return: A copy of the constraints, or None.
+        :rtype: dict, optional
+        """
+        if self._constraints_ is None:
+            return None
+        return {k: v.copy() for k, v in self._constraints_.items()}
 
     def __deepcopy__(self, memo) -> Var:
         """
@@ -106,14 +155,27 @@ class Var:
             return frame_info
         return None
 
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str]|None = None,
+                 width: int|None = None) -> None:
         """
         Initialize an instance of the class.
+
+        This is the only __init__ in the hierarchy for every fixed point type -
+        Logic and the classes below it do not define one, because a constructor
+        frame per level is a real cost when a testbench builds a field object per
+        field per transaction. What such a class provides instead is class
+        attributes: its width and mask where they are fixed, and its _fmt_default_.
 
         :param value: The value associated with the instance.
         :type value: Any
         :param auto_random: Flag to enable or disable automatic randomness. Defaults to True.
         :type auto_random: bool, optional
+        :param fmt: Format of the variable. Defaults to the class's _fmt_default_.
+        :type fmt: Callable, optional
+        :param width: Width of the variable in bits, for the types that have one.
+            Defaults to the width of the class.
+        :type width: int, optional
+        :raises ValueError: If a width is given and is not a positive integer.
         """
 
         if len(args) > 1 and self.__class__._deprecated_name_warning_:
@@ -125,35 +187,32 @@ class Var:
             self.__class__._deprecated_name_warning_ = False
         assert len(args) == 1 or len(args) == 2, f"Unsupported number of args: {args}"
 
-        # Lookup
-        self._idx_ = -1
-        Var._register_(self)
+        # The width, and the mask derived from it, before the value - _cast_ needs
+        # both. A class whose width is fixed carries the pair as class attributes
+        # and nothing is stored here; the two must always agree, so they are only
+        # ever set together.
+        if width is not None:
+            if not isinstance(width, int) or width <= 0:
+                raise ValueError("Width must be a positive integer.")
+            self.width = int(width)
+            self._mask_ = (1 << width) - 1
 
-        self.name = "**deprecated**"
-        self.value = args[-1]
         self._auto_random_ = auto_random
-        self._fmt_ = fmt
+        self._fmt_ = self._fmt_default_ if fmt is None else fmt
 
-        # Randomness and constraints
-        self._rand_ = None
-        self._constraints_ = {True : {}, False: {}}
+        # Straight to _value_, rather than through the value property, which
+        # would reach the same _cast_ by a longer route.
+        self._value_ = self._cast_(args[-1])
 
-        # Debug
-        self._file_ = None
-        self._line_ = None
-        self._varname_ = None
-
+        # Everything else - the lookup index, the constraints, the z3 variable and
+        # the debug fields - is left to the class attributes until something needs
+        # it. See the comment on them, and _register_.
         if Var._AVL_CONSTRAINT_DEBUG_:
             frame = self._extract_caller_frame_()
             if frame:
                 self._file_ = frame.filename
                 self._line_ = frame.lineno
                 self._varname_ = self._extract_varname_(frame.code_context)
-            else:
-                self._file_ = self._line_ = self._varname_ = None
-
-        # z3 object creation removed
-        # created as part of randomization to speed up non-randomized object creation
 
     @property
     def value(self):
@@ -398,12 +457,17 @@ class Var:
             raise ValueError("Cannot add constraints to non-random variables")
 
         if target is None:
-            if name in self._constraints_[hard]:
+            # First constraint on this variable - see the class attributes.
+            constraints = self._constraints_
+            if constraints is None:
+                constraints = self._constraints_ = {True : {}, False: {}}
+
+            if name in constraints[hard]:
                 warnings.warn(f"Overriding existing constraint : {name}",
                               UserWarning,
                               stacklevel=2)
 
-            self._constraints_[hard][name] = constraint
+            constraints[hard][name] = constraint
         else:
             if name in target:
                 warnings.warn(f"Overriding existing constraint : {name}",
@@ -421,6 +485,9 @@ class Var:
         """
         if not self._auto_random_:
             raise ValueError("Cannot remove constraints from non-random variables")
+
+        if self._constraints_ is None:
+            return
 
         if name in self._constraints_[True]:
             del self._constraints_[True][name]
@@ -451,13 +518,17 @@ class Var:
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
         """
-        for c in self._constraints_[True].values():
+        constraints = self._constraints_
+        if constraints is None:
+            return False
+
+        for c in constraints[True].values():
             solver.add(c(self._rand_))
 
-        for c in self._constraints_[False].values():
+        for c in constraints[False].values():
             solver.add_soft(c(self._rand_), weight="100")
 
-        return any(self._constraints_.values())
+        return any(constraints.values())
 
     def _apply_randomization_(self, solver : Optimize, free_bits : list[int]|None = None,
                               record : list|None = None) -> None:

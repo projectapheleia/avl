@@ -29,9 +29,7 @@ class Enum(Logic):
                        self.values.copy(),
                        auto_random=self._auto_random_,
                        fmt=self._fmt_)
-        new_obj._constraints_ = {
-            k: v.copy() for k, v in self._constraints_.items()
-        }
+        new_obj._constraints_ = self._copied_constraints_()
         new_obj.__class__ = self.__class__
         return  new_obj
 
@@ -134,7 +132,7 @@ class Enum(Logic):
         # depends on where it sits in the solve and that can differ from one
         # randomization to the next. Adding the range constraint again would warn
         # about overriding itself.
-        if "_c_range_" not in self._constraints_[True]:
+        if self._constraints_ is None or "_c_range_" not in self._constraints_[True]:
             self.add_constraint(
                 "_c_range_",
                 lambda x: Or([x == v for v in self.values.values()]),

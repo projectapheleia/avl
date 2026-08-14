@@ -13,6 +13,10 @@ from .logic import Logic
 
 class Uint(Logic):
 
+    # Prints as str, where Logic prints as hex. See Var.__init__ for why a level
+    # of this hierarchy contributes class attributes rather than a constructor.
+    _fmt_default_ = str
+
     def __copy__(self):
         """
         Copy the Logic - always make a copy to ensure randomness is preserved.
@@ -21,33 +25,9 @@ class Uint(Logic):
         :rtype: Var
         """
         new_obj = Uint(self.value, auto_random=self._auto_random_, fmt=self._fmt_, width=self.width)
-        new_obj._constraints_ = {
-            k: v.copy() for k, v in self._constraints_.items()
-        }
+        new_obj._constraints_ = self._copied_constraints_()
         new_obj.__class__ = self.__class__
         return  new_obj
-
-    def __init__(
-        self,
-        *args,
-        auto_random: bool = True,
-        fmt: Callable[..., str] = str,
-        width: int = 32
-    ) -> None:
-        """
-        Initialize an instance of the class.
-
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        :param width: The width of the variable in bits, defaults to 32.
-        :type width: int, optional
-        :raises ValueError: If the width is not a positive integer.
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=width)
 
 class Uint8(Uint):
     def __init__(

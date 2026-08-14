@@ -34,7 +34,9 @@ ucli.key
 
 # Benchmarks
 benchmarks/results/
+benchmarks/**/results/
 benchmarks/**/results.csv
+benchmarks/**/quality.csv
 
 .failed
 .passed

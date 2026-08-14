@@ -16,15 +16,38 @@ FLAVOUR        ?= $(notdir $(CURDIR))
 BENCH_DIR      := $(patsubst %/,%,$(dir $(CURDIR)))
 BENCH_NAME     := $(patsubst $(BENCH_ROOT)/%,%,$(BENCH_DIR))
 
-# Number of randomizations performed by a single run of the testbench.
+# Optional per benchmark settings - the same file bench.mk reads, so a benchmark
+# can set anything below as well as its ITERATIONS and BURST. Read before the
+# defaults, so that a "?=" here wins over the default and a command line
+# variable still wins over both.
+-include $(BENCH_DIR)/bench.conf
+
+# Where a benchmark's sources live. Benchmarks that differ only in configuration
+# share one set, and point at it from their bench.conf.
+BENCH_SOURCE_DIR ?= $(BENCH_DIR)
+
+# What a single iteration of this benchmark is, in the singular. Recorded with
+# every timing row, and the word the report is then written in.
+BENCH_UNIT     ?= randomization
+
+# Whether this benchmark has a randomization quality to measure. Cleared by a
+# benchmark that does not randomize at all.
+BENCH_QUALITY  ?= 1
+
+# Extra environment for the testbench, as "NAME=value ..." - anything a
+# benchmark's own controls need on top of the ones every flavour is given.
+BENCH_ENV      ?=
+
+# Number of iterations - randomizations, items sent - performed by a single run
+# of the testbench.
 ITERATIONS     ?= 1000
 
-# Randomizations performed per clock edge. One per edge is the default. Raise it
-# only where a single randomization is too cheap to measure against the cost of
-# advancing the clock, around 8 us. ITERATIONS should be a multiple.
+# Iterations performed per clock edge. One per edge is the default. Raise it only
+# where a single iteration is too cheap to measure against the cost of advancing
+# the clock, around 8 us. ITERATIONS should be a multiple.
 BURST          ?= 1
 
-# A burst bigger than the run itself would randomize more times than were asked
+# A burst bigger than the run itself would iterate more times than were asked
 # for, and the report would divide by the wrong number. This matters when
 # ITERATIONS is overridden on the command line, below a benchmark's own BURST.
 # "override" is needed because BURST reaches here as a command line variable.
@@ -60,6 +83,7 @@ BENCH_TIME      = $(PYTHON) $(BENCH_ROOT)/scripts/bench_time.py \
                     --benchmark $(BENCH_NAME) \
                     --flavour $(FLAVOUR) \
                     --tool $(BENCH_TOOL) \
+                    --unit $(BENCH_UNIT) \
                     --repeats $(REPEATS) \
                     --interval $(SAMPLE_INTERVAL)
 

@@ -8,6 +8,9 @@
 
 BENCH_ROOT     := $(patsubst %/,%,$(dir $(realpath $(firstword $(MAKEFILE_LIST)))))
 BENCH_NAME     := $(patsubst $(BENCH_ROOT)/%,%,$(CURDIR))
+# Named as well as CURDIR, so that bench.conf reads the same here as it does in
+# common.mk, where the benchmark is not the directory make is running in.
+BENCH_DIR      := $(CURDIR)
 
 # Any subdirectory holding a Makefile is a flavour. The reference implementation
 # is run first, anything else in the order it is found.
@@ -20,15 +23,20 @@ FLAVOUR_DIRS   := $(foreach f,$(FLAVOURS),$(wildcard $(CURDIR)/$(f)/Makefile))
 # Either may also be set for one flavour alone, as ITERATIONS_<flavour> and
 # BURST_<flavour>, for a flavour whose cost is out of proportion to the rest and
 # which would otherwise dominate the run. The report compares time per
-# randomization, so the counts do not have to match.
+# randomization, so the counts do not have to match. See common.mk for the rest
+# of what a benchmark may set here.
 -include $(CURDIR)/bench.conf
+
+# Whether this benchmark randomizes at all, and so has a quality to measure.
+BENCH_QUALITY  ?= 1
 
 RESULTS        := $(CURDIR)/results.csv
 
 # One per flavour, written by its quality run. Passed to the scripts as is,
 # not through wildcard - that caches the directory as it was when this file was
 # read, which is before the runs have written anything.
-QUALITY_DUMPS  := $(foreach m,$(FLAVOUR_DIRS),$(dir $(m))quality.csv)
+QUALITY_DUMPS  := $(if $(filter-out 0,$(BENCH_QUALITY)),\
+                    $(foreach m,$(FLAVOUR_DIRS),$(dir $(m))quality.csv))
 
 # Flavours held to the randomization quality thresholds. AVL is what this
 # tree is responsible for; the others are measured but not failed on.
@@ -87,11 +95,15 @@ report:
 # Just the randomization quality, without re-timing anything.
 quality:
 	@echo "$(BENCH_NAME)"
+ifeq ($(BENCH_QUALITY),0)
+	@echo "  nothing is randomized here - no quality to measure"
+else
 	@$(foreach m,$(FLAVOUR_DIRS), \
 	  $(MAKE) --no-print-directory -C $(dir $(m)) quality \
 	    $(call BENCH_VARS,$(call flavour_of,$(m))) || exit 1;)
 	@$(PYTHON) $(BENCH_ROOT)/scripts/bench_quality.py $(QUALITY_DUMPS) \
 	  --check $(QUALITY_CHECK)
+endif
 
 clean:
 	@$(foreach m,$(FLAVOUR_DIRS), \

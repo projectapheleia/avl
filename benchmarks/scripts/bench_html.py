@@ -30,6 +30,17 @@ SERIES_COLOURS = [NAVY, BLUE, BLUE_LIGHT]
 # appear there. One that was not run is simply left out.
 OPPONENTS = [("sv", "SystemVerilog"), ("pyuvm", "pyuvm / pyvsc")]
 
+# Used when render() is called without one - see bench_report.PROFILES, which is
+# where the wording for each kind of benchmark lives.
+DEFAULT_PROFILE = {
+    "singular": "randomization",
+    "plural": "randomizations",
+    "short": "rand",
+    "cost": "cost of randomization",
+    "isolates": "the solver",
+    "differs": "",
+}
+
 TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -403,7 +414,7 @@ def head_to_head(nets: list[dict], benchmarks: list[str],
                  opponent: str) -> tuple[list[str], list[float]]:
     """AVL against one other flavour, benchmark by benchmark.
 
-    The figure is the difference in time per randomization, expressed
+    The figure is the difference in time per unit of work, expressed
     symmetrically so that twice as fast reads +100% and half as fast reads
     -100%. Benchmarks the opponent did not run are left out.
     """
@@ -434,17 +445,22 @@ def is_clipped(deltas: list[float]) -> bool:
 
 def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
            quality: list[dict] | None = None,
-           quality_summary: list[dict] | None = None) -> str:
+           quality_summary: list[dict] | None = None,
+           profile: dict | None = None) -> str:
     """Build the whole page.
 
-    nets            - one entry per benchmark and flavour, randomization cost only
+    nets            - one entry per benchmark and flavour, cost of the work alone
     raws            - one entry per benchmark, flavour and phase, as measured
     rows            - every individual run, used for the run to run spread
     quality         - one entry per benchmark, flavour and field, spread of the draws
     quality_summary - the worst field per benchmark and flavour
+    profile         - the words to write the page in - see bench_report.PROFILES
     """
     quality = quality or []
     quality_summary = quality_summary or []
+    profile = profile or DEFAULT_PROFILE
+    unit = profile["singular"]
+    plural = profile["plural"]
     benchmarks = sorted({n["benchmark"] for n in nets})
     iterations = sorted({n["iterations"] for n in nets})
     tools = sorted({n["tool"] for n in nets})
@@ -480,7 +496,7 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
 
         body.append(panel(
             "Head to head",
-            "time per randomization, harness subtracted",
+            f"time per {unit}, harness subtracted",
             f'<div class="{"charts-head" if len(comparisons) > 1 else "charts-wide"}">'
             f"{charts}</div>"
             '<div class="legend">'
@@ -539,14 +555,15 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
         f'<span>Platform <b>{esc(platform.system())} {esc(platform.machine())}</b></span>'
         f'<span>Simulator <b>{esc(", ".join(tools))}</b></span>'
         f'<span>Benchmarks <b>{len(benchmarks)}</b></span>'
-        f'<span>Randomizations per run <b>{esc(", ".join(str(i) for i in iterations))}</b></span>'
+        f'<span>{esc(plural.capitalize())} per run '
+        f'<b>{esc(", ".join(str(i) for i in iterations))}</b></span>'
         f'<span>Runs per testbench <b>{esc(", ".join(str(r) for r in repeats))}</b></span>'
         "</div>",
     ))
 
     # ------------------------------------------------------------- net results
     headers = ["benchmark", "flavour", "simulator", "iterations", "real (s)", "user (s)",
-               "sys (s)", "cpu (%)", "us / randomization", "relative", "harness (s)"]
+               "sys (s)", "cpu (%)", f"us / {unit}", "relative", "harness (s)"]
     table_rows = []
     best_rows = set()
     for i, n in enumerate(nets):
@@ -561,8 +578,8 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
         ])
 
     body.append(panel(
-        "Cost of randomization",
-        "harness subtracted - this is the solver alone",
+        f"{profile['cost'][0].upper()}{profile['cost'][1:]}",
+        f"harness subtracted - this is {profile['isolates']} alone",
         table(headers, table_rows, numeric=set(range(3, 11)), highlight={8: best_rows}),
         padded=False,
     ))
@@ -574,7 +591,7 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
 
         charts = [
             figure(
-                "Time per randomization",
+                f"Time per {unit}",
                 svg_bar_chart(labels, [("us", [n["per_iter_us"] for n in entries])], " us"),
             ),
             figure(
@@ -615,7 +632,7 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
 
         body.append(panel(
             benchmark,
-            f"{entries[0]['iterations']:,} randomizations per run",
+            f"{entries[0]['iterations']:,} {plural} per run",
             f'<div class="charts">{"".join(charts)}</div>',
         ))
 
@@ -636,34 +653,33 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
     ))
 
     # ------------------------------------------------------------------ notes
+    quality_note = (
+        "<p>Randomization quality is measured separately, on an untimed run that records every "
+        "value drawn. It is kept out of the timed runs so that recording cannot be measured as "
+        "randomization cost.</p>"
+        if quality else ""
+    )
+
     body.append(panel(
         "How this is measured",
         "",
         '<div class="notes">'
-        "<p>Every flavour of a benchmark compiles the <b>same RTL</b> and runs the <b>same "
-        "harness</b>, which drives clock and reset and randomizes once per rising edge. The only "
-        "difference is where the randomization happens: the <b>sv</b> flavour randomizes inside the "
-        "RTL with SystemVerilog classes and constraints solved by the simulator, the <b>avl</b> "
-        "flavour randomizes the identical object from Python with AVL, and the <b>pyuvm</b> flavour "
-        "randomizes it again as a pyvsc randobj, from the run_phase of a pyuvm test. Everything "
-        "else - the simulator, the elaboration, the clock, the loop - is common.</p>"
+        f"<p>{profile['differs']}</p>"
         "<p>Each testbench is measured twice. The <b>baseline</b> drives exactly the same number of "
-        "clock cycles with randomization switched off, so it captures startup, elaboration, cocotb "
-        "bringup and the cost of the loop itself. The <b>run</b> does the same with randomization "
-        "on. The difference between them, shown above as the cost of randomization, is the solver "
-        "and nothing else.</p>"
+        "clock cycles with the work under test switched off, so it captures startup, elaboration, "
+        "cocotb bringup and the cost of the loop itself. The <b>run</b> does the same with it "
+        f"switched on. The difference between them, shown above as the {esc(profile['cost'])}, is "
+        f"{esc(profile['isolates'])} and nothing else.</p>"
         "<p>CPU time is accounted across the whole process tree. A simulator solves constraints in "
         "a separate solver process which it never reaps, so <b>getrusage</b> and <b>/usr/bin/time</b> "
         "attribute none of that solver's CPU time to the run. Sampling every process in the run's "
         "process group recovers it - through <b>/proc</b> on Linux and <b>libproc</b> on macOS. "
         "CPU usage above 100% means more than one core was busy.</p>"
-        "<p>Randomization quality is measured separately, on an untimed run that records every "
-        "value drawn. It is kept out of the timed runs so that recording cannot be measured as "
-        "randomization cost.</p>"
+        f"{quality_note}"
         "<p>Reported figures are the median across runs; the spread chart shows the full range. "
         "Benchmarks, flavours and repeats are always run one at a time. A flavour may run a "
-        "different number of randomizations where its cost is out of proportion to the rest - "
-        "everything compared here is a time <b>per</b> randomization, so the counts need not "
+        f"different number of {esc(plural)} where its cost is out of proportion to the rest - "
+        f"everything compared here is a time <b>per</b> {esc(unit)}, so the counts need not "
         "match.</p>"
         "</div>",
     ))
