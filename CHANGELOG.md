@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+ - [#93](https://github.com/projectapheleia/avl/issues/93) List(): clear() left the push event set, so a subsequent blocking_pop() did not block and raised `IndexError: pop from empty list`. The push event is now kept aligned with the contents of the list, which also covers the same failure when the list was emptied by pop()/remove(), and when a List was constructed with initial elements (blocking_pop() blocked despite the data being available). blocking_pop() additionally re-checks the list after waking, so a single push no longer releases more than one waiter.
+
 ### Changed
  - avl-coverage-analysis: redesigned HTML report as a single self-contained page with AVL/Apheleia branded styling, a searchable hierarchy browser (tests/merged/ranked → covergroups), and a sortable/filterable/searchable covergroup and bin-detail table, replacing the old multi-page DataTables site. The stats scatter-plot popup is now an in-page modal instead of a separate linked file. No more jQuery/DataTables/Plotly CDN dependency, so reports work fully offline.
  - avl-trace-analysis: matched the same branded, sortable/filterable/searchable table styling and dropped the jQuery/DataTables CDN dependency. Added friendlier errors for missing trace files, invalid `--query` expressions, and unknown `--sort` columns (previously raw Python tracebacks). `--sort` now supports descending order via a leading `-` (e.g. `--sort=-data`).

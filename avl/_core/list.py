@@ -20,6 +20,20 @@ class List(list):
         super().__init__(args)
         self._push_event = Event()
         self._pop_event = Event()
+        self._sync_push_event()
+
+    def _sync_push_event(self) -> None:
+        """
+        Aligns the push event with the contents of the list.
+
+        The push event is set if, and only if, the list is not empty. Any method
+        which changes the length of the list must maintain this, otherwise a
+        blocking_pop can be released against an empty list.
+        """
+        if len(self):
+            self._push_event.set()
+        else:
+            self._push_event.clear()
 
     def append(self, data: Any) -> None:
         """
@@ -33,9 +47,10 @@ class List(list):
 
     def clear(self) -> None:
         """
-        Clears the list and clears the event.
+        Clears the list, clears the push event and sets the pop event.
         """
         super().clear()
+        self._push_event.clear()
         self._pop_event.set()
 
     def extend(self, iterable: Iterable) -> None:
@@ -70,6 +85,7 @@ class List(list):
         :rtype: Any
         """
         v = super().pop(index)
+        self._sync_push_event()
         self._pop_event.set()
         return v
 
@@ -81,6 +97,7 @@ class List(list):
         :type data: Any
         """
         super().remove(data)
+        self._sync_push_event()
         self._pop_event.set()
 
     async def blocking_pop(self) -> Any:
@@ -90,11 +107,10 @@ class List(list):
         :returns: The popped element.
         :rtype: Any
         """
-        await self._push_event.wait()
-        v = self.pop(0)
-        if len(self) == 0:
+        while not len(self):
             self._push_event.clear()
-        return v
+            await self._push_event.wait()
+        return self.pop(0)
 
     async def blocking_get(self) -> Any:
         """
