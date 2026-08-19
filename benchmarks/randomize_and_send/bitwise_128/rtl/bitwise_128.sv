@@ -37,6 +37,22 @@ module bitwise_128_bench #(
     input logic [WIDTH-1:0] d [0:SIGNALS-1]
 );
 
+    // The minor edit turnaround/bitwise_128 measures - one line of the
+    // testbench, changed. Only ever read in the final display, so an edit
+    // cannot alter what the run does or how long it takes; the whole cost of
+    // changing it is having to build again, which is the point.
+    //
+    // For this flavour that is a compile time define, because this is where the
+    // sv testbench lives and it is compiled with the design. The Python
+    // flavours read the same value from the environment at run time. It differs
+    // with every edit so that no two of them are the same edit - see
+    // scripts/bench_edit.py.
+`ifdef BENCH_EDIT
+    localparam int unsigned REVISION = `BENCH_EDIT;
+`else
+    localparam int unsigned REVISION = 1;
+`endif
+
     // Common to every flavour - lets the testbench confirm that all of them ran
     // for the same number of clock cycles.
     int unsigned cycles = 0;
@@ -185,8 +201,8 @@ module bitwise_128_bench #(
 `endif
 
     final begin
-        $display("BENCH_RESULT rtl signals=%0d checked=%0d checksum=%0d",
-                 signals, checked, checksum);
+        $display("BENCH_RESULT rtl signals=%0d checked=%0d checksum=%0d revision=%0d",
+                 signals, checked, checksum, REVISION);
     end
 
 endmodule : bitwise_128_bench

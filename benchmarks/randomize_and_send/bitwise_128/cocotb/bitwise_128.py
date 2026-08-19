@@ -36,6 +36,15 @@ RESET_CYCLES = 5
 # Width of every variable, matching WIDTH in the RTL.
 WIDTH = 32
 
+# The minor edit turnaround/bitwise_128 measures - one line of the testbench,
+# changed. Only ever printed, so an edit cannot alter what the run does or how
+# long it takes; the whole cost of changing it is whatever has to be built again
+# before it can run, which for a Python testbench is this module and nothing
+# else. The sv flavour carries the same line as a compile time define, in the
+# RTL, where its testbench lives. The value differs with every edit so that no
+# two of them are the same edit - see scripts/bench_edit.py.
+REVISION = int(os.environ.get("BENCH_EDIT") or 1)
+
 # The four bitwise constraints, in the order they rotate over the variables.
 # Variable i carries KINDS[i % 4] - see the checker in the RTL.
 KINDS = [
@@ -144,4 +153,5 @@ async def test(dut):
         )
 
     if flavour == "avl":
-        print(f"BENCH_RESULT flavour=avl signals={signals} iterations={count}")
+        print(f"BENCH_RESULT flavour=avl signals={signals} iterations={count} "
+              f"revision={REVISION}")

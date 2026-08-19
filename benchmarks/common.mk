@@ -30,6 +30,20 @@ BENCH_SOURCE_DIR ?= $(BENCH_DIR)
 # every timing row, and the word the report is then written in.
 BENCH_UNIT     ?= randomization
 
+# What this benchmark measures, and so which phases its flavours are run
+# through:
+#
+#   work        the default. An already built model is run twice - once with the
+#               work under test switched on and once with it off - and the two
+#               are subtracted, leaving the cost of the work alone.
+#   turnaround  a build and run from nothing, then a build and run again after a
+#               minor edit to the testbench. Nothing is subtracted: the figure is
+#               the whole wait, which is what a turnaround is.
+#
+# The two cannot be mixed within a benchmark - a phase is either measuring work
+# or measuring the wait to see it - so this is set per benchmark in bench.conf.
+BENCH_PHASES   ?= work
+
 # Whether this benchmark has a randomization quality to measure. Cleared by a
 # benchmark that does not randomize at all.
 BENCH_QUALITY  ?= 1

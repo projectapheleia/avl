@@ -59,6 +59,21 @@ ifeq ($(FLAVOUR),sv)
 COMPILE_ARGS         += +define+BENCH_SV_RANDOMIZE +define+BENCH_SV
 endif
 
+# Which edit of the testbench to build - see BENCH_PHASES in common.mk. Set by
+# bench_edit.py in the environment this make inherits, to a number that differs
+# with every edit, and unset everywhere else.
+#
+# The sv flavour's testbench is compiled with the design, so its edit is a
+# define the model has to be elaborated and compiled again for. The Python
+# flavours read the same value from the environment at run time and rebuild
+# nothing. That difference is the entire subject of the turnaround benchmark, so
+# it is expressed here rather than hidden inside a testbench.
+ifneq ($(BENCH_EDIT),)
+ifeq ($(FLAVOUR),sv)
+COMPILE_ARGS         += +define+BENCH_EDIT=$(BENCH_EDIT)
+endif
+endif
+
 # Seed the simulator's constraint solver. AVL is seeded through cocotb, which
 # seeds the Python random module from COCOTB_RANDOM_SEED.
 ifeq ($(SIM),verilator)
@@ -85,6 +100,10 @@ include $(shell cocotb-config --makefiles)/Makefile.sim
 # Randomization is enabled for the measured run and disabled for the baseline.
 # SystemVerilog reads a plusarg, Python reads the environment - the two flavours
 # are otherwise driven identically.
+#
+# BENCH_EDIT is deliberately not set here: on the turnaround benchmarks it is
+# put into the environment by bench_edit.py, which has to choose it afresh for
+# every repeat, and an assignment on this line would overwrite it.
 COCOTB_RUN            = env MAKEFLAGS= \
                           COCOTB_RANDOM_SEED=$(SEED) \
                           BENCH_ITERATIONS=$(ITERATIONS) \
@@ -94,11 +113,46 @@ COCOTB_RUN            = env MAKEFLAGS= \
                           $(MAKE) --no-print-directory -C $(CURDIR) sim \
                             COCOTB_PLUSARGS="+randomize=$(1) +burst=$(BURST) $(BENCH_PLUSARGS)"
 
-.PHONY: bench build warm baseline run quality
+# ---------------------------------------------------------------------------
+# Turnaround - see BENCH_PHASES in common.mk. Unused by a benchmark measuring
+# work rather than the wait to see it.
+# ---------------------------------------------------------------------------
 
+# Everything a build produces, and so everything a cold build has to produce
+# again. SIM_BUILD is cocotb's, and is this flavour's alone; the byte compiled
+# testbench is shared with any other benchmark built from the same sources,
+# which only means they compile it again too.
+BENCH_COLD_PATHS     ?= $(abspath $(SIM_BUILD)) $(BENCH_SOURCE_DIR)/cocotb/__pycache__
+
+# Where a minor edit to the testbench lands. For sv that is the RTL - the sv
+# flavour's testbench lives inside it, behind `ifdef BENCH_SV - and for the
+# others it is the cocotb module. Each flavour's own testbench, and nothing
+# else: the design is not what is being edited.
+ifeq ($(FLAVOUR),sv)
+BENCH_EDIT_FILES     ?= $(VERILOG_SOURCES)
+else
+BENCH_EDIT_FILES     ?= $(BENCH_SOURCE_DIR)/cocotb/$(MODULE).py
+endif
+
+# Named apart from BENCH_EDIT, which is the flag above and arrives from the
+# environment - a makefile variable of that name would shadow it, and the sv
+# flavour would quietly never be given its define.
+BENCH_EDIT_CMD        = $(PYTHON) $(BENCH_ROOT)/scripts/bench_edit.py
+
+.PHONY: bench build warm baseline run quality cold rerun edit
+
+ifeq ($(BENCH_PHASES),turnaround)
+# Nothing is built beforehand and nothing is warmed - here the build is the
+# measurement, and a warm run would have done half of it already.
+#
+# In this order, and not in parallel: rerun needs what cold built, and edit
+# needs the model rerun proved was up to date.
+bench: cold rerun edit
+else
 # A benchmark that does not randomize has no quality to measure - see
 # BENCH_QUALITY in common.mk.
 bench: build warm baseline run $(if $(filter-out 0,$(BENCH_QUALITY)),quality)
+endif
 
 # Elaborate and compile the model, outside the measurement.
 build:
@@ -123,6 +177,41 @@ baseline: build
 run: build
 	@$(BENCH_TIME) --phase run --iterations $(ITERATIONS) --log $(CURDIR)/run.log \
 	  -- $(call COCOTB_RUN,1)
+
+# A checkout that has never been simulated: the model elaborated and compiled
+# from nothing, the testbench byte compiled from nothing, and the test run. What
+# it costs to see this testbench work for the first time.
+#
+# One iteration is one build and run, not one transaction - the report divides
+# by it, and what is being compared here is the wait, whole. How much the run
+# then does is ITERATIONS, and is deliberately small: it has to be a real run,
+# but it is not the thing being measured.
+cold:
+	@echo "  $(FLAVOUR)  cold      building and running from scratch"
+	@$(BENCH_TIME) --phase cold --iterations 1 --log $(CURDIR)/cold.log \
+	  -- $(BENCH_EDIT_CMD) --remove $(BENCH_COLD_PATHS) -- $(call COCOTB_RUN,1)
+
+# The same thing again with nothing changed at all: no file touched, no define
+# moved, so there is nothing for any flavour to build and this is the run on its
+# own. Recorded as the "baseline" phase, and subtracted from the one below -
+# what is left is the rebuild an edit forced, and nothing else. For a testbench
+# the simulator never compiled, that is zero, and the report says so.
+rerun:
+	@echo "  $(FLAVOUR)  rerun     running again with nothing changed"
+	@$(BENCH_TIME) --phase baseline --iterations 1 --log $(CURDIR)/rerun.log \
+	  -- $(call COCOTB_RUN,1)
+
+# One line of the testbench changed, and nothing else touched. For sv that line
+# is in a source the model was compiled from, so the model is elaborated and
+# compiled again before anything can run; for the Python flavours there is
+# nothing to compile but the module itself, and the model the simulator already
+# built still stands. Recorded as the "run" phase, because it is the figure this
+# benchmark exists to compare.
+edit:
+	@echo "  $(FLAVOUR)  edit      rebuilding and running after a testbench edit"
+	@$(BENCH_TIME) --phase run --iterations 1 --log $(CURDIR)/edit.log \
+	  -- $(BENCH_EDIT_CMD) --touch $(BENCH_EDIT_FILES) --revision BENCH_EDIT \
+	     -- $(call COCOTB_RUN,1)
 
 # Records every value drawn, for bench_quality.py to measure the spread of.
 # Untimed and separate from the measured runs, because the values have to be
