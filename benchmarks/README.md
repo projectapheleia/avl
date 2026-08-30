@@ -62,20 +62,6 @@ orders of magnitude - and that AVL alone trades a per constraint shape setup cos
 state, so which flavour is fastest depends on how long the test is. See its
 [README](randomize_and_send/bitwise_128/README.md).
 
-### [turnaround](turnaround) - the cost of waiting for a build
-
-| Benchmark | What it does |
-|-----------|--------------|
-| [turnaround/bitwise_128](turnaround/bitwise_128) | builds and runs randomize_and_send's testbench from nothing, then changes one line of it and builds and runs it again |
-
-The odd one out, and the only benchmark here comparing the language a testbench is written in rather
-than the library. Everything else in this tree measures how fast a testbench runs; this measures how
-long you wait before it runs at all. The `sv` flavour's testbench is compiled with the design, so one
-edited line costs a full elaboration and compile; the Python flavours rebuild nothing but a `.pyc`.
-Nothing is subtracted - a turnaround is a wall clock wait, and the wait is the figure. See its
-[README](turnaround/bitwise_128/README.md), which also covers what it says about AVL's fixed setup
-cost on a short test.
-
 ---
 
 ## Running
@@ -210,7 +196,6 @@ benchmarks/
 │   ├── bench_time.py     # timing harness
 │   ├── bench_dump.py     # records drawn values, shared by the testbenches
 │   ├── bench_quality.py  # measures the spread of those values
-│   ├── bench_edit.py     # the state a turnaround build is measured from
 │   ├── bench_env.py      # the machine, the simulator and the package versions
 │   ├── bench_report.py   # report generator
 │   └── bench_html.py     # HTML report
@@ -290,7 +275,6 @@ anything in [common.mk](common.mk) can be set there. Beyond `ITERATIONS` and `BU
 | `BENCH_SOURCE_DIR` | the benchmark    | Where `rtl/` and `cocotb/` live, and what `TOPLEVEL` and `MODULE` are named after |
 | `BENCH_UNIT`       | `randomization`  | What one iteration is, in the singular. Recorded with every timing row, and the word the report is then written in |
 | `BENCH_QUALITY`    | `1`              | Whether this benchmark randomizes, and so has a spread of values to measure. `0` skips the quality runs and the quality section of the report |
-| `BENCH_PHASES`     | `work`           | What is measured. `work` runs an already built model with the work under test on and off and subtracts the two; `turnaround` builds and runs from nothing, then again after an edit, and subtracts nothing |
 | `BENCH_ENV`        | empty            | Extra environment for the testbench, as `NAME=value ...`, for controls of the benchmark's own |
 | `BENCH_PLUSARGS`   | the seed         | Extra plusargs for the RTL, likewise |
 

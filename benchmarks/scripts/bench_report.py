@@ -52,14 +52,6 @@ RAW_HEADERS = ["benchmark", "flavour", "sim", "phase", "iters", "runs", "real (s
 # cost                       what the measurement is the cost of
 # isolates                   what is left once the harness has been subtracted
 # differs                    what changes from one flavour to the next
-#
-# A benchmark that measures a whole wait rather than a cost per iteration sets
-# three more, because the sentences above are only true of the others:
-#
-# scale                      label, factor and format for the per unit figure -
-#                            see bench_html.per_unit
-# subtitle                   what the headline figure is, under its heading
-# method                     how it was arrived at, for the notes at the foot
 PROFILES = {
     "randomization": {
         "singular": "randomization",
@@ -112,49 +104,6 @@ PROFILES = {
             "simulator, the elaboration, the clock, the loop - is common. This is both halves of "
             "the tree in one figure, and the solve is the larger part of it by some way.",
     },
-    "edit": {
-        "singular": "edit",
-        "plural": "edits",
-        "short": "edit",
-        "scale": ("s", 1e-6, "{:,.2f}"),
-        "columns": {"real": "rebuild (s)", "overhead": "run (s)"},
-        # A rebuild of nothing is the right answer for two of the three
-        # flavours, and no ratio can be taken against it. What the flavours can
-        # be compared on is the whole wait, which is what anyone actually sits
-        # through, so that is what the charts at the top are drawn from.
-        "compare": {
-            "metric": "per_iter_total_us",
-            "subtitle": "total wait per edit - the rebuild and the run it precedes, together",
-        },
-        "cost": "cost of a testbench edit",
-        "isolates": "the rebuild the edit forced",
-        "subtitle": "run subtracted - this is what had to be built again, and nothing else",
-        "method":
-            "Each flavour is measured three times, and the three are meant to be read together. "
-            "The <b>cold</b> phase throws away everything that was built, so the model is "
-            "elaborated and compiled from nothing and the testbench is byte compiled from "
-            "nothing, and then runs the test - what it costs to see a testbench work for the "
-            "first time. The <b>baseline</b> phase runs it again with nothing changed at all, "
-            "which is the run on its own. The <b>run</b> phase marks one line of the testbench as "
-            "just edited and builds and runs again, whatever that turns out to require. The "
-            "difference between the last two, shown above, is the rebuild the edit forced - for a "
-            "testbench the simulator never compiled, that is nothing, and the figure is zero. All "
-            "three totals are in the table below. The edit is modelled rather than made: the "
-            "file's timestamp is moved on, exactly as saving it in an editor does, and a define "
-            "selects the edited variant of what is inside it - so the rebuild is a real rebuild "
-            "of genuinely different source, and the tree is left as it was found.",
-        "differs":
-            "Every flavour builds and runs the <b>same testbench</b> - the one "
-            "randomize_and_send measures the transaction cost of - from the <b>same RTL</b>, with "
-            "the same simulator, and each is then given the <b>same one line edit</b> to its own "
-            "testbench. The only difference is where that testbench lives. The <b>sv</b> flavour's "
-            "is compiled with the design, so the line that changed is a line the simulator has to "
-            "elaborate and compile again before anything can run. The <b>avl</b> and <b>pyuvm</b> "
-            "flavours' testbenches are Python, which the simulator never sees: the model it built "
-            "still stands, and the only thing to compile again is the module itself. This is the "
-            "one benchmark in the tree where the language, rather than the library, is what is "
-            "being compared.",
-    },
 }
 
 # Benchmarks that measure different things, reported together.
@@ -190,10 +139,8 @@ def profile_of(rows: list[dict]) -> dict:
 
 
 def net_headers(profile: dict) -> list[str]:
-    label, _, _ = bench_html.per_unit(profile)
-    real, overhead = bench_html.columns_of(profile)
-    return ["benchmark", "flavour", "sim", "iters", real, "user (s)", "sys (s)",
-            "cpu (%)", f"{label}/{profile['short']}", "relative", overhead]
+    return ["benchmark", "flavour", "sim", "iters", "real (s)", "user (s)", "sys (s)",
+            "cpu (%)", f"us/{profile['short']}", "relative", "harness (s)"]
 
 
 def read(paths: list[Path]) -> list[dict]:
@@ -261,35 +208,23 @@ def net_metrics(summary: dict[tuple, dict]) -> list[dict]:
         net["cpu_pct"] = 100.0 * total / net["real_s"] if net["real_s"] > 0.05 else 0.0
         net["per_iter_us"] = 1e6 * net["real_s"] / iterations if iterations else 0.0
         net["overhead_s"] = base["real_s"] if base else 0.0
-
-        # The cost with what was subtracted put back - everything that was
-        # actually waited for. Meaningless on a benchmark whose harness is
-        # startup it would pay once however long the test ran, and the whole
-        # point on one where the harness is the run itself and the cost is a
-        # build; profiles say which of the two they are - see PROFILES.
-        net["per_iter_total_us"] = net["per_iter_us"] + (
-            1e6 * net["overhead_s"] / iterations if iterations else 0.0)
         nets.append(net)
 
-    # Cost relative to the cheapest flavour of the same benchmark. A cost of
-    # nothing has no ratio to offer and none to be measured against - which is
-    # what a turnaround benchmark finds for every flavour that does not have to
-    # be compiled - so where the cheapest is zero, no ratios are given at all.
+    # Cost relative to the fastest flavour of the same benchmark.
     for benchmark in {n["benchmark"] for n in nets}:
         entries = [n for n in nets if n["benchmark"] == benchmark]
-        best = min((n["per_iter_us"] for n in entries), default=0.0)
+        best = min((n["per_iter_us"] for n in entries if n["per_iter_us"] > 0), default=0.0)
         for n in entries:
-            n["relative"] = (n["per_iter_us"] / best) if best > 0 else 0.0
+            n["relative"] = (n["per_iter_us"] / best) if best else 0.0
 
     return nets
 
 
-def net_table(nets: list[dict], profile: dict | None = None) -> list[list]:
-    _, factor, fmt = bench_html.per_unit(profile or {})
+def net_table(nets: list[dict]) -> list[list]:
     return [[
         n["benchmark"], n["flavour"], n["tool"], n["iterations"],
         f"{n['real_s']:.3f}", f"{n['user_s']:.3f}", f"{n['sys_s']:.3f}",
-        f"{n['cpu_pct']:.1f}", fmt.format(n["per_iter_us"] * factor),
+        f"{n['cpu_pct']:.1f}", f"{n['per_iter_us']:.1f}",
         f"{n['relative']:.2f}x" if n["relative"] else "-",
         f"{n['overhead_s']:.3f}",
     ] for n in nets]
@@ -382,7 +317,7 @@ def main() -> int:
         print(bench_env.render(env))
         print()
         print(f"{args.title} - {profile['cost']}, {bench_html.subtitle_of(profile)}")
-        print(render(headers, net_table(nets, profile)))
+        print(render(headers, net_table(nets)))
         print()
         print("As measured, including simulator and interpreter startup")
         print(render(RAW_HEADERS, raw_table(raws)))
@@ -400,7 +335,7 @@ def main() -> int:
         with open(args.output / "summary.csv", "w", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(headers)
-            writer.writerows(net_table(nets, profile))
+            writer.writerows(net_table(nets))
 
         links = related_reports(args.related)
 
@@ -424,7 +359,7 @@ def main() -> int:
             "",
             prose(bench_html.method_of(profile)),
             "",
-            render(headers, net_table(nets, profile)),
+            render(headers, net_table(nets)),
             "",
             "## As measured",
             "",

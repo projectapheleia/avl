@@ -41,12 +41,6 @@ DEFAULT_PROFILE = {
     "differs": "",
 }
 
-# How the per unit figure is shown: the column label, what to multiply the
-# microseconds by, and how to format the result. A cost per iteration belongs in
-# microseconds; a whole build and run belongs in seconds, where microseconds
-# would be eight digits of arithmetic precision and no measurement precision.
-DEFAULT_SCALE = ("us", 1.0, "{:,.1f}")
-
 TEMPLATE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -177,30 +171,8 @@ def esc(value) -> str:
     return html.escape(str(value))
 
 
-def per_unit(profile: dict) -> tuple[str, float, str]:
-    """Label, factor and format for this benchmark's per unit figure."""
-    label, factor, fmt = profile.get("scale", DEFAULT_SCALE)
-    return label, factor, fmt
-
-
-def columns_of(profile: dict) -> tuple[str, str]:
-    """Headings for the two columns whose meaning changes with the benchmark.
-
-    On a benchmark measuring work these are the measured time and the harness
-    taken off it. On one measuring a turnaround they are the rebuild an edit
-    forced and the run it was taken off, which is not the same sentence at all.
-    """
-    columns = profile.get("columns", {})
-    return columns.get("real", "real (s)"), columns.get("overhead", "harness (s)")
-
-
 def cheapest_rows(nets: list[dict]) -> set[int]:
-    """Rows holding the lowest cost for their benchmark.
-
-    Not the rows with a relative of 1.00 - there is no such row when the lowest
-    cost is zero, and a turnaround benchmark measures exactly that for every
-    flavour the simulator does not have to compile.
-    """
+    """Rows holding the lowest cost for their benchmark."""
     lowest: dict[str, float] = {}
     for n in nets:
         seen = lowest.get(n["benchmark"])
@@ -211,21 +183,15 @@ def cheapest_rows(nets: list[dict]) -> set[int]:
 
 def subtitle_of(profile: dict) -> str:
     """What the headline figure is, in one line, under its heading."""
-    return profile.get("subtitle",
-                       f"harness subtracted - this is {profile['isolates']} alone")
+    return f"harness subtracted - this is {profile['isolates']} alone"
 
 
 def method_of(profile: dict) -> str:
     """How the headline figure was arrived at.
 
-    A benchmark measuring work subtracts a baseline from a run and reports what
-    is left. One measuring a turnaround subtracts nothing, because the wait is
-    the figure - so it says so itself, rather than being described by a sentence
-    that is only true of the others.
+    The same words in the page and in the markdown beside it, so that the two
+    cannot drift apart.
     """
-    if profile.get("method"):
-        return profile["method"]
-
     return (
         "Each testbench is measured twice. The <b>baseline</b> drives exactly the same number of "
         "clock cycles with the work under test switched off, so it captures startup, elaboration, "
@@ -523,18 +489,8 @@ def links_panel(related: list[tuple[str, str]]) -> str:
                  f'<div class="links">{links}</div>')
 
 
-def compare_metric(profile: dict) -> str:
-    """Which figure the head to head charts are drawn from.
-
-    The cost alone, normally. A benchmark whose cost is zero for the flavours
-    that have no work to do says so here, and names something that can carry a
-    ratio instead.
-    """
-    return profile.get("compare", {}).get("metric", "per_iter_us")
-
-
-def head_to_head(nets: list[dict], benchmarks: list[str], opponent: str,
-                 metric: str = "per_iter_us") -> tuple[list[str], list[float]]:
+def head_to_head(nets: list[dict], benchmarks: list[str],
+                 opponent: str) -> tuple[list[str], list[float]]:
     """AVL against one other flavour, benchmark by benchmark.
 
     The figure is the difference in time per unit of work, expressed
@@ -550,7 +506,7 @@ def head_to_head(nets: list[dict], benchmarks: list[str], opponent: str,
         if avl is None or other is None:
             continue
 
-        ours, theirs = avl[metric], other[metric]
+        ours, theirs = avl["per_iter_us"], other["per_iter_us"]
         if ours <= 0 or theirs <= 0:
             continue
 
@@ -607,10 +563,9 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
     # Time per randomization, AVL against each of the other flavours, side by
     # side. Expressed symmetrically, so twice as fast reads +100% and half as
     # fast reads -100%.
-    metric = compare_metric(profile)
     comparisons = []
     for opponent, caption in OPPONENTS:
-        labels, deltas = head_to_head(nets, benchmarks, opponent, metric)
+        labels, deltas = head_to_head(nets, benchmarks, opponent)
         if deltas:
             comparisons.append((caption, labels, deltas))
 
@@ -642,7 +597,7 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
 
         body.append(panel(
             "Head to head",
-            profile.get("compare", {}).get("subtitle", f"time per {unit}, harness subtracted"),
+            f"time per {unit}, harness subtracted",
             f'<div class="{"charts-head" if len(comparisons) > 1 else "charts-wide"}">'
             f"{charts}</div>"
             '<div class="legend">'
@@ -718,18 +673,15 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
         body.append(env_panel(env))
 
     # ------------------------------------------------------------- net results
-    scale_label, scale_factor, scale_fmt = per_unit(profile)
-    real_header, overhead_header = columns_of(profile)
-
-    headers = ["benchmark", "flavour", "simulator", "iterations", real_header, "user (s)",
-               "sys (s)", "cpu (%)", f"{scale_label} / {unit}", "relative", overhead_header]
+    headers = ["benchmark", "flavour", "simulator", "iterations", "real (s)", "user (s)",
+               "sys (s)", "cpu (%)", f"us / {unit}", "relative", "harness (s)"]
     table_rows = []
     best_rows = cheapest_rows(nets)
     for n in nets:
         table_rows.append([
             n["benchmark"], n["flavour"], n["tool"], f"{n['iterations']:,}",
             f"{n['real_s']:.3f}", f"{n['user_s']:.3f}", f"{n['sys_s']:.3f}",
-            f"{n['cpu_pct']:.1f}", scale_fmt.format(n["per_iter_us"] * scale_factor),
+            f"{n['cpu_pct']:.1f}", f"{n['per_iter_us']:,.1f}",
             f"{n['relative']:.2f}x" if n["relative"] else "-",
             f"{n['overhead_s']:.3f}",
         ])
@@ -746,67 +698,26 @@ def render(title: str, nets: list[dict], raws: list[dict], rows: list[dict],
         entries = [n for n in nets if n["benchmark"] == benchmark]
         labels = [n["flavour"] for n in entries]
 
-        # What the wait is made of. Where the cost and what it was measured
-        # against are two halves of one wall clock wait - a rebuild and the run
-        # after it - both are drawn, side by side. Otherwise the cost alone is
-        # the chart, because the harness it was taken off is startup that says
-        # nothing about the work.
-        if "columns" in profile:
-            cost = [(real_header, [n["per_iter_us"] * scale_factor for n in entries]),
-                    (overhead_header, [n["overhead_s"] for n in entries])]
-            cost_names = [real_header, overhead_header]
-        else:
-            cost = [(scale_label, [n["per_iter_us"] * scale_factor for n in entries])]
-            cost_names = []
-
         charts = [
             figure(
                 f"Time per {unit}",
-                svg_bar_chart(labels, cost, f" {scale_label}"),
-                cost_names,
+                svg_bar_chart(labels, [("us", [n["per_iter_us"] for n in entries])], " us"),
+            ),
+            figure(
+                "CPU time consumed",
+                svg_bar_chart(
+                    labels,
+                    [("user", [n["user_s"] for n in entries]),
+                     ("system", [n["sys_s"] for n in entries])],
+                    " s",
+                ),
+                ["user", "system"],
+            ),
+            figure(
+                "Cores used",
+                svg_bar_chart(labels, [("cpu", [n["cpu_pct"] for n in entries])], " %"),
             ),
         ]
-
-        # What building it from nothing cost - the cold total, less the run it
-        # also contains. Worth drawing because every flavour the simulator does
-        # not compile a testbench into builds exactly the same model, from the
-        # same sources with the same arguments, so their bars are expected to
-        # match: this chart is where they can be seen to.
-        if "columns" in profile:
-            builds = []
-            for n in entries:
-                cold = next((r for r in raws
-                             if r["benchmark"] == benchmark and r["flavour"] == n["flavour"]
-                             and r["phase"] == "cold"), None)
-                builds.append(max(cold["real_s"] - n["overhead_s"], 0.0) if cold else 0.0)
-
-            if any(builds):
-                charts.append(figure(
-                    "Build from nothing",
-                    svg_bar_chart(labels, [("build", builds)], " s"),
-                ))
-
-        # How the cost was spent across the cores. Left out where the cost is a
-        # build that some flavours do not have to do: the CPU time of a rebuild
-        # that never happened is zero, and three charts of zero say less than
-        # not drawing them.
-        if "columns" not in profile:
-            charts += [
-                figure(
-                    "CPU time consumed",
-                    svg_bar_chart(
-                        labels,
-                        [("user", [n["user_s"] for n in entries]),
-                         ("system", [n["sys_s"] for n in entries])],
-                        " s",
-                    ),
-                    ["user", "system"],
-                ),
-                figure(
-                    "Cores used",
-                    svg_bar_chart(labels, [("cpu", [n["cpu_pct"] for n in entries])], " %"),
-                ),
-            ]
 
         # Run to run spread of the measured runs, before the harness is removed.
         ranges = []
