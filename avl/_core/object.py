@@ -157,6 +157,14 @@ class Object:
     _table_recurse_ = True
     """Recurse into nested objects when producing the table for ``str()``."""
 
+    _full_name_ = None
+    """The full name, remembered the first time it is asked for.
+
+    Established in ``__init__`` rather than on first use: several methods walk
+    ``self.__dict__`` and log while doing it, and a key appearing part way
+    through that would raise. Updating one that is already there does not.
+    """
+
     def _own_field_attributes_(self) -> dict:
         """
         Return this object's own field attribute dictionary, creating it if the
@@ -280,6 +288,7 @@ class Object:
         """
         self.name = name
         self._parent_ = parent
+        self._full_name_ = None
 
     def __str__(self) -> str:
         """
@@ -357,6 +366,7 @@ class Object:
         :type name: str
         """
         self.name = name
+        self._full_name_ = None
 
     def get_name(self) -> str:
         """
@@ -371,13 +381,25 @@ class Object:
         """
         Get the full hierarchical name of the component.
 
+        Built once and remembered. An object is given its parent when it is
+        constructed and the hierarchy does not change afterwards, so this is
+        asked for far more often than it can change - it names the logger of
+        every message the object writes.
+
+        ``set_name`` and ``set_parent`` forget it again. They cannot forget it
+        for an object's descendants, which do not know their ancestors have
+        changed, so renaming a component that already has children is not
+        supported.
+
         :return: Full name of the component.
         :rtype: str
         """
-        if self._parent_ is not None:
-            return self._parent_.get_full_name() + "." + self.name
-        else:
-            return self.name
+        if self._full_name_ is None:
+            if self._parent_ is not None:
+                self._full_name_ = self._parent_.get_full_name() + "." + self.name
+            else:
+                self._full_name_ = self.name
+        return self._full_name_
 
     def set_parent(self, parent: Object|None) -> None:
         """
@@ -387,6 +409,7 @@ class Object:
         :type parent: Object, optional
         """
         self._parent_ = parent
+        self._full_name_ = None
 
     def get_parent(self) -> Object|None:
         """

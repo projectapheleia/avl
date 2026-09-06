@@ -8,8 +8,13 @@ from .phase import Phase
 
 class PhaseManager:
     _first: Phase | None = None
+    """The phase the run starts from, and the head of the chain of phases."""
+
     _current: Phase | None = None
+    """The phase being run, or None before the run starts and after it ends."""
+
     _phases: dict[str, Phase] = {}
+    """Every registered phase, by upper case name."""
 
     @staticmethod
     def get_phase(name: str) -> Phase:

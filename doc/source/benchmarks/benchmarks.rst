@@ -361,6 +361,130 @@ seed, with the analysis off and then on, gives identical distributions: the same
 288 distinct addresses, the same per bit frequencies, the same set of lengths and
 identifiers.
 
+Logging
+-------
+
+A testbench logs on every interesting line, so what a message costs is spread
+across everything else it does. Writing one from a component used to take 13
+microseconds and one from six levels down 22; both now take around 7, and the log
+files are byte for byte what they were.
+
+Results
+^^^^^^^
+
+Measured old implementation against new, alternating in one simulation, eleven
+rounds, best of each.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - Measurement
+     - Before
+     - After
+     - Change
+   * - Info from a component
+     - 12.93 us
+     - **6.18 us**
+     - -52.2 %
+   * - Info, six deep hierarchy
+     - 21.94 us
+     - **7.22 us**
+     - -67.1 %
+   * - Through :doc:`avl.Log </modules/avl._core.log>` directly
+     - 14.72 us
+     - **6.66 us**
+     - -54.8 %
+   * - To a ``.json`` log file
+     - 16.58 us
+     - 9.77 us
+     - -41.1 %
+   * - To a ``.csv`` log file
+     - 23.82 us
+     - 14.27 us
+     - -40.1 %
+   * - To a ``.txt`` log file
+     - 58.43 us
+     - 50.27 us
+     - -14.0 %
+   * - Below the level
+     - 0.69 us
+     - 0.66 us
+     - -5.2 %
+
+.. image:: /images/avl_logging_overall.png
+   :align: center
+   :alt: Before and after cost of writing a log message, from a component, from a deep hierarchy, through avl.Log, and to a json, csv or txt log file.
+
+Where the Time Went
+^^^^^^^^^^^^^^^^^^^
+
+**Every message was compared against every message before it.** AVL kept a list
+of the records it had handled and scanned it before accepting a new one. The list
+is cleared at each flush, so with the default flush level a message was compared
+against five hundred others on average.
+
+The list was there for a real reason. AVL names its logger groups hierarchically,
+``env.agent.driver``, and Python's logging passes a record up that hierarchy to
+every ancestor logger, each of which sees it again - so the repeats have to be
+dropped. But the list only ever tested identity, and marking the record itself
+does that in constant time. This is most of the improvement, and all of the
+difference between a shallow hierarchy and a deep one.
+
+**The loggers were held in a list.** Every message asks whether its logger already
+carries AVL's handler, which cost a linear scan - and a testbench has a logger per
+component. It is now a set.
+
+**The full name was rebuilt on every message.** Naming the logger walks the chain
+of ancestors and joins it into a string, and that was done for every message - so
+the deeper a component sits, the more it cost. An object is given its parent when
+it is constructed and the hierarchy does not change afterwards, so the name is now
+built once and remembered. That leaves what a message costs the same at any depth:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 25 25 25
+
+   * - Hierarchy depth
+     - Rebuilt
+     - Remembered
+     - Change
+   * - 1
+     - 7.78 us
+     - 7.78 us
+     - 0.0 %
+   * - 2
+     - 8.10 us
+     - 7.55 us
+     - -6.9 %
+   * - 4
+     - 8.58 us
+     - 8.19 us
+     - -4.6 %
+   * - 8
+     - 9.18 us
+     - 8.29 us
+     - -9.8 %
+
+**The escape pattern was rebuilt per message.** The pattern that strips console
+colour codes out of a log file is now compiled once. This measured as no change,
+since Python caches compiled patterns, but it is one allocation fewer per message.
+
+Nothing about what is captured changed, and neither did any output format.
+
+Output Is Unchanged
+^^^^^^^^^^^^^^^^^^^
+
+A log is only useful if it stays both readable and parseable, so this was checked
+rather than assumed. The same messages - covering tabs, newlines, console colour
+codes, unicode, quotes and commas - were written through the old record handling
+and the new one, in every supported format, and compared byte for byte. All six
+are identical.
+
+``.txt`` is the one format that stays expensive, at around 51 microseconds per
+message. It draws a boxed table, which is the whole point of it: it is the format
+meant for a person to read. The machine-readable formats cost between 9 and 15.
+
 Running Your Own Measurements
 -----------------------------
 

@@ -142,3 +142,32 @@ process with the rounds interleaved.
 
 See `randomization/results/RESULTS.md` for the results of the randomization
 optimisation work.
+
+## logging
+
+Measures what it costs to write a log message — the one thing a testbench does on
+every interesting line, so its cost is spread across everything else.
+
+```bash
+cd benchmarks/logging
+./logging_benchmark.py                     # 2000 messages, 3 repeats
+./logging_benchmark.py -n 5000 -r 5
+```
+
+| measurement | what it is |
+| --- | --- |
+| `info from a component` | one INFO message, no log file — the headline figure |
+| `info, six deep hierarchy` | the same from six levels down, where the group name costs more to build and the record reaches more handlers |
+| `below the level` | a DEBUG message, filtered out, which should cost almost nothing |
+| `formatted message` | an INFO message built from an f-string, as most real ones are |
+| `avl.Log directly` | through `avl.Log`, without a component to name the group |
+| `to a .csv/.json/.txt log file` | with a log file set, in each of three formats |
+
+All figures are microseconds per message.
+
+Each measurement starts from a clean log state, and the file measurements flush
+once before timing — the log accumulates globally, and the first flush of a format
+imports pandas, so without both the numbers describe the order the measurements
+ran in rather than the thing being measured.
+
+See `logging/results/RESULTS.md` for the results of the logging optimisation work.

@@ -21,6 +21,11 @@ yaml = lazy_import("yaml")
 # Done at top level as must be done early to catch all startup messages
 # from cocotb
 
+_ANSI_ESCAPE_ = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+"""Colour and cursor control that a console handler adds, which has no place in
+a log file. Compiled once, because it is applied to every message logged.
+"""
+
 
 class _avl_callback_handler_(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
@@ -29,11 +34,39 @@ class _avl_callback_handler_(logging.Handler):
 
 class Log:
     _logfile = None
-    _loggers = []
+    """Where the log is written, and in what format - the extension chooses it.
+
+    None until :meth:`set_logfile` is called, and while it is None the records
+    are still collected but never written anywhere.
+    """
+
+    _loggers = set()
+    """The loggers carrying the callback handler.
+
+    A set, not a list: every message logged asks whether its logger is in here,
+    and a testbench has one logger per component.
+    """
+
     _logdata = {"Time": [], "Level": [], "Group": [], "Message": [], "Filename": [], "LineNo": []}
+    """The records collected since the last flush, held as one list per column.
+
+    Column oriented because that is the shape a DataFrame is built from, and
+    every output format goes through one.
+    """
+
     _flush_level = 1000
+    """How many records to collect before writing them out.
+
+    The trade is memory against how often the file is touched, and how much of
+    the log survives a simulation that dies without unwinding. See
+    :meth:`set_flush_level`.
+    """
+
     _first = True
-    _records = []
+    """Whether the next flush is the first one.
+
+    The first writes the file and its header; the rest append to it.
+    """
 
     @staticmethod
     def _avl_callback(record: logging.LogRecord) -> None:
@@ -50,19 +83,19 @@ class Log:
             - When the flush level is reached, the log data is written out and cleared.
         """
 
-        def remove_control_chars(s):
-            ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
-            s = ansi_escape.sub("", s)  # Remove ANSI escape codes
-            return s
-
-        if record in Log._records:
+        # A record reaches here once per logger in its ancestry that carries the
+        # callback handler, because logging propagates it up the hierarchy, and
+        # AVL names its groups hierarchically. Marking the record is how the
+        # repeats are dropped; scanning a list of the records seen so far costs
+        # more with every message logged since the last flush.
+        if getattr(record, "_avl_seen_", False):
             return
-        Log._records.append(record)
+        record._avl_seen_ = True
 
         Log._logdata["Time"].append(get_sim_time())
         Log._logdata["Level"].append(record.levelname)
         Log._logdata["Group"].append(record.name)
-        Log._logdata["Message"].append(remove_control_chars(record.getMessage()))
+        Log._logdata["Message"].append(_ANSI_ESCAPE_.sub("", record.getMessage()))
         Log._logdata["Filename"].append(record.pathname)
         Log._logdata["LineNo"].append(record.lineno)
 
@@ -76,7 +109,6 @@ class Log:
                 "Filename": [],
                 "LineNo": [],
             }
-            Log._records = []
 
     @staticmethod
     def _override_cocotb_logging() -> None:
@@ -98,7 +130,7 @@ class Log:
         loggers = [logging.getLogger(name) for name in logging.root.manager.loggerDict]
         for logger in loggers:
             logger.addHandler(_avl_callback_handler_())
-            Log._loggers.append(logger)
+            Log._loggers.add(logger)
 
         # Some simulators don't call atexit, so we register a cleanup function
         # to ensure that logs are flushed at the end of the program.
@@ -126,7 +158,7 @@ class Log:
         """
         logger = logging.getLogger(group)
         logger.addHandler(_avl_callback_handler_())
-        Log._loggers.append(logger)
+        Log._loggers.add(logger)
 
         logger.setLevel(logging.INFO)
         return logger
