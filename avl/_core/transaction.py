@@ -13,6 +13,7 @@ from cocotb.utils import get_sim_time
 
 from .object import Object
 
+
 class Transaction(Object):
     # Defaults held on the class - a transaction that is never given an id or
     # an event stores neither.

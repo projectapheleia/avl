@@ -7,6 +7,7 @@
 import avl
 import cocotb
 
+
 class Item(avl.Object):
     def __init__(self):
         super().__init__("item", None)

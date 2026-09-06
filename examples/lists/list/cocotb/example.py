@@ -105,9 +105,9 @@ class example_env(avl.Env):
         await self.blocking_pop_test(lst)
 
         # A list emptied by clear/pop/remove must block again
-        await self.blocking_pop_after_drain_test(lambda l: l.clear())
-        await self.blocking_pop_after_drain_test(lambda l: l.pop())
-        await self.blocking_pop_after_drain_test(lambda l: l.remove(0))
+        await self.blocking_pop_after_drain_test(lambda lst: lst.clear())
+        await self.blocking_pop_after_drain_test(lambda lst: lst.pop())
+        await self.blocking_pop_after_drain_test(lambda lst: lst.remove(0))
 
         # A list constructed with elements must not block
         assert(await avl.List(42).blocking_pop() == 42)

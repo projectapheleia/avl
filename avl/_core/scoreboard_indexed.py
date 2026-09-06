@@ -5,9 +5,10 @@
 
 from typing import Any
 
+from cocotb import start_soon
+
 from .component import Component
 from .scoreboard import Scoreboard
-from cocotb import start_soon
 
 
 class IndexedScoreboard(Scoreboard):

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.1.0] - 2026-09-06
 
 ### Added
  - benchmarks/: a benchmark suite covering the four things a testbench spends its time on - start-up, object and variable creation, randomization and logging. Each records runs with `--json`/`--label` and compares against them with `--compare`, and `make` targets in `benchmarks/` list, run and clean the lot. `benchmarks/examples` additionally times every example against the released `avl-core` of the same version, to show what a local change is worth on real testbenches rather than on microbenchmarks. Results and write-ups are in each benchmark's `results/` directory, and summarised in the Benchmarks chapter of the documentation.

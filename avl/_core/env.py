@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from cocotb.clock import Clock
 from cocotb.handle import HierarchyObject, LogicObject
+
 try:
     from cocotb.simtime import TimeUnit
 except ImportError:

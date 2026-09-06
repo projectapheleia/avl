@@ -4,9 +4,10 @@
 # Apheleia attributes example
 
 
+import os
+
 import avl
 import cocotb
-import os
 
 
 class example_env(avl.Env):
