@@ -374,3 +374,73 @@ them on your own setup - either to confirm the improvements or to check that a
 change of your own has not regressed start-up or object creation time. See
 `benchmarks/README.md <https://github.com/projectapheleia/avl/blob/main/benchmarks/README.md>`_
 for what the benchmark measures and how to record and compare runs.
+
+Comparing Against a Release
+---------------------------
+
+The benchmarks above measure one thing each in isolation. The examples benchmark
+does the opposite: it runs every example in ``examples/`` twice - once against the
+AVL in your checkout, once against the released ``avl-core`` of the same version
+number from PyPI - and reports the difference for each one.
+
+It is a utility rather than a result. Use it to see whether a change you have made
+locally helps or hurts real testbenches, before deciding it was worth making.
+
+Running it
+^^^^^^^^^^
+
+.. code-block:: shell
+
+    $ source ./avl.sh                    # from the repository root
+    $ cd benchmarks/examples
+    $ ./examples_benchmark.py --dry-run  # show the plan, run nothing
+    $ ./examples_benchmark.py            # 3 timed runs per example, per variant
+
+The first real run builds a virtual environment holding the released ``avl-core``
+and takes a while; later runs reuse it. ``--dry-run`` reports the versions, the
+environments and the examples it would run without running any of them, which is
+the quickest way to check the comparison is set up the way you expect.
+
+Useful options
+^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 60
+
+   * - Option
+     - Effect
+   * - ``-n N``
+     - Timed runs of each example in each variant. Default 3.
+   * - ``--only PATTERN``
+     - Only examples matching PATTERN, for example ``'constraints/*'``. Repeatable.
+   * - ``--skip PATTERN``
+     - Exclude examples matching PATTERN. Repeatable.
+   * - ``--released-version V``
+     - Compare against a release other than the current version number.
+   * - ``--json FILE`` / ``--markdown FILE``
+     - Record the run, so a later one can be compared against it.
+   * - ``--rebuild-env``
+     - Recreate the released environment, after changing what is pinned into it.
+
+What it controls for
+^^^^^^^^^^^^^^^^^^^^
+
+AVL is the only difference between the two variants. ``cocotb``, ``z3-solver``
+and the other shared dependencies are installed into the released environment at
+the versions your local environment uses, so the simulator, the cocotb release
+and the constraint solver are identical on both sides.
+
+Each variant gets a private copy of ``examples/``, so neither writes into your
+working tree or invalidates the other's build. Every example is run untimed first,
+which compiles the DUT, so no timed sample includes Verilator compilation. Timed
+runs then alternate between the variants, so drift in machine load does not
+systematically favour either, and every run in both variants is given the same
+random seed so the two solve the same problems.
+
+An example that fails in either variant is reported as not compared rather than
+aborting the run - a new example the released version cannot run, for instance.
+
+See
+`benchmarks/examples/README.md <https://github.com/projectapheleia/avl/blob/main/benchmarks/examples/README.md>`_
+for the rest, including what is pinned into the released environment and why.

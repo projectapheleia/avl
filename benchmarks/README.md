@@ -11,6 +11,23 @@ source ./avl.sh
 
 All benchmarks run on Verilator.
 
+## Cleaning up
+
+```bash
+cd benchmarks
+make list        # what is here, and how each one is driven
+make clean       # simulator build directories, working copies, stray output
+make distclean   # everything, including the results
+```
+
+`clean` leaves each benchmark's `results/` directory alone, so recorded runs and
+write-ups survive it.
+
+`distclean` removes them, along with the released-package environments the
+scripted benchmarks build. `results/` is not tracked by git, so a `distclean` is
+the end of any recorded run and any write-up in there — take a copy first if you
+want to keep one. The environments cost a download and an install to recreate.
+
 ## startup
 
 Measures how long it takes to start an AVL testbench, and how much of that is

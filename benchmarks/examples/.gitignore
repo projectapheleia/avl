@@ -1,0 +1,6 @@
+# Released avl-core environments built by examples_benchmark.py
+.venv-released-*/
+# Per-variant copies of examples/ used for timing
+work/
+# Recorded runs and write-ups
+results/
