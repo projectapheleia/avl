@@ -8,7 +8,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from anytree import AnyNode, RenderTree
-from graphviz import Digraph
+
+from ._lazy import lazy_import
+
+graphviz = lazy_import("graphviz")
 
 if TYPE_CHECKING:
     from .component import Any, Component
@@ -90,11 +93,11 @@ class Visualization:
                 label = f"{node.id}"
                 dot.node(str(id(node)), label, shape="box")
 
-                dot = Digraph(format="png")
+                dot = graphviz.Digraph(format="png")
                 dot.attr("node", shape="box")
 
         # Creat the diagram
-        dot = Digraph(format="png")
+        dot = graphviz.Digraph(format="png")
         dot.attr("graph", rankdir="TB")
 
         # Add the components

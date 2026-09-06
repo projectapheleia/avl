@@ -4,15 +4,18 @@
 # Description:
 # Apheleia Verification Library Coverpoint
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from typing import Any
 
-import pandas as pd
-
+from ._lazy import lazy_import
 from .component import Component
 from .coverage import Coverage
 from .covercross import Covercross
 from .coverpoint import Coverpoint
+
+pd = lazy_import("pandas")
 
 
 class Covergroup(Component):

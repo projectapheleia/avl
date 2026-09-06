@@ -7,8 +7,10 @@ import warnings
 from collections.abc import Callable
 from typing import Literal, TypeAlias
 
-import bincopy
-import pandas as pd
+from ._lazy import lazy_import
+
+bincopy = lazy_import("bincopy")
+pd = lazy_import("pandas")
 
 Endianness: TypeAlias = Literal['little', 'big']
 

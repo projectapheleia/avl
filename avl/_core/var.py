@@ -13,7 +13,9 @@ import weakref
 from collections.abc import Callable
 from typing import Any
 
-from z3 import FP, BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
+from ._lazy import lazy_import
+
+z3 = lazy_import("z3")
 
 
 class Var:
@@ -172,7 +174,7 @@ class Var:
         """
         raise NotImplementedError("Var does not implement _range_ method. Please override in subclass.")
 
-    def _z3_(self) -> BoolRef | IntNumRef | BitVecNumRef | FP:
+    def _z3_(self) -> z3.BoolRef | z3.IntNumRef | z3.BitVecNumRef | z3.FP:
         """
         Return the Z3 representation of the variable.
 
@@ -330,7 +332,7 @@ class Var:
         return self._range_()[1]
 
     def add_constraint(
-        self, name: str, constraint: BoolRef, hard: bool = True, target: dict|None = None
+        self, name: str, constraint: z3.BoolRef, hard: bool = True, target: dict|None = None
     ):
         """
         Add a constraint to the object.
@@ -390,7 +392,7 @@ class Var:
         """
         pass
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -425,38 +427,38 @@ class Var:
         """
 
         def new_solver():
-            solver = Optimize()
+            solver = z3.Optimize()
             self._apply_constraints_(solver)
 
             return solver
 
         def cast(solver, obj):
-            if solver.check() == sat:
+            if solver.check() == z3.sat:
                 model = solver.model()
                 val = model.eval(obj.value() if hasattr(obj, "value") else obj, model_completion=True)
-                if is_fp(val):
-                    bv = model.eval(fpToIEEEBV(val))
+                if z3.is_fp(val):
+                    bv = model.eval(z3.fpToIEEEBV(val))
                     cast_value = bv
-                elif isinstance(val, (IntNumRef | BitVecNumRef)):
+                elif isinstance(val, (z3.IntNumRef | z3.BitVecNumRef)):
                     cast_value = val.as_long()
                 else:
                     cast_value = val
             else:
                 msg = "Failed to randomize\n"
                 if os.environ.get("AVL_CONSTRAINT_DEBUG") is not None:
-                    s = Solver()
+                    s = z3.Solver()
                     assertions = list(solver.assertions())
-                    trackers = [Bool(f"p{i}") for i in range(len(assertions))]
+                    trackers = [z3.Bool(f"p{i}") for i in range(len(assertions))]
 
                     for t, c in zip(trackers, assertions, strict=True):
                         s.assert_and_track(c, t)
 
-                    if s.check() != sat:
+                    if s.check() != z3.sat:
                         core = s.unsat_core()
                         for t in core:
                             idx = int(str(t)[1:])
                             constraint = assertions[idx]
-                            vars_in_constraint = z3util.get_vars(constraint)
+                            vars_in_constraint = z3.z3util.get_vars(constraint)
 
                             msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
                             for v in vars_in_constraint:

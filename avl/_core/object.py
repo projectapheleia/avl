@@ -11,13 +11,14 @@ import warnings
 from collections.abc import Callable, MutableMapping, MutableSequence, Set
 from typing import Any, TypeVar
 
-import tabulate
-from z3 import BitVecNumRef, Bool, BoolRef, IntNumRef, Optimize, Solver, fpToIEEEBV, is_fp, sat, z3util
-
+from ._lazy import lazy_import
 from .factory import Factory
 from .log import Log
 from .struct import Struct
 from .var import Var
+
+tabulate = lazy_import("tabulate")
+z3 = lazy_import("z3")
 
 def _var_finder_(obj: Any, memo: dict[int, Any], conversion: dict[Any, Any] = None, do_copy : bool=False, do_deepcopy : bool=False) -> Any:
     """
@@ -542,7 +543,7 @@ class Object:
         return retVal
 
     def add_constraint(
-        self, name: str, constraint: BoolRef, *args: Any, hard: bool = True, target: dict|None = None
+        self, name: str, constraint: z3.BoolRef, *args: Any, hard: bool = True, target: dict|None = None
     ) -> None:
         """
         Add a constraint to the object.
@@ -597,7 +598,7 @@ class Object:
         """
         pass
 
-    def randomize(self, hard: list[BoolRef]|None = None, soft: list[BoolRef]|None = None) -> None:
+    def randomize(self, hard: list[z3.BoolRef]|None = None, soft: list[z3.BoolRef]|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
         It uses an optimization solver to find a suitable value that satisfies the constraints.
@@ -626,10 +627,10 @@ class Object:
                 constrained_vars[a._idx_] = a
                 return a._rand_
 
-        def new_solver() -> Optimize:
+        def new_solver() -> z3.Optimize:
             nonlocal vars, constrained_vars
 
-            solver = Optimize()
+            solver = z3.Optimize()
 
             def is_solver_var(a : Any) -> bool:
                 return isinstance(a, Var) and a._auto_random_ and a._idx_ in var_ids
@@ -657,7 +658,7 @@ class Object:
 
         def cast(solver):
             cast_values = {}
-            if solver.check() == sat:
+            if solver.check() == z3.sat:
                 model = solver.model()
                 for var in model.decls():
                     try:
@@ -668,29 +669,29 @@ class Object:
                     if v is not None:
                         val = model.eval(var(), model_completion=True)
 
-                        if is_fp(val):
-                            bv = model.eval(fpToIEEEBV(val))
+                        if z3.is_fp(val):
+                            bv = model.eval(z3.fpToIEEEBV(val))
                             cast_values[v._idx_] = bv
-                        elif isinstance(val, IntNumRef| BitVecNumRef):
+                        elif isinstance(val, z3.IntNumRef| z3.BitVecNumRef):
                             cast_values[v._idx_] = val.as_long()
                         else:
                             cast_values[v._idx_] = val
             else:
                 msg = "Failed to randomize\n"
                 if os.environ.get("AVL_CONSTRAINT_DEBUG") is not None:
-                    s = Solver()
+                    s = z3.Solver()
                     assertions = list(solver.assertions())
-                    trackers = [Bool(f"p{i}") for i in range(len(assertions))]
+                    trackers = [z3.Bool(f"p{i}") for i in range(len(assertions))]
 
                     for t, c in zip(trackers, assertions, strict=True):
                         s.assert_and_track(c, t)
 
-                    if s.check() != sat:
+                    if s.check() != z3.sat:
                         core = s.unsat_core()
                         for t in core:
                             idx = int(str(t)[1:])
                             constraint = assertions[idx]
-                            vars_in_constraint = z3util.get_vars(constraint)
+                            vars_in_constraint = z3.z3util.get_vars(constraint)
 
                             msg += f"\tCONFLICTING CONSTRAINT: {constraint}\n"
                             for v in vars_in_constraint:

@@ -10,9 +10,10 @@ import random
 from collections.abc import Callable
 from typing import Any
 
-from z3 import BitVec, BitVecRef, Extract, Optimize
-
+from ._lazy import lazy_import
 from .var import Var
+
+z3 = lazy_import("z3")
 
 
 class Logic(Var):
@@ -88,16 +89,16 @@ class Logic(Var):
         """
         return (0, (1 << self.width) - 1)
 
-    def _z3_(self) -> BitVecRef:
+    def _z3_(self) -> z3.BitVecRef:
         """
         Get the Z3 representation of the variable.
 
         :return: The Z3 BitVec representation of the variable.
         :rtype: z3.BitVecRef
         """
-        return BitVec(f"{self._idx_}", self.width)
+        return z3.BitVec(f"{self._idx_}", self.width)
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -112,7 +113,7 @@ class Logic(Var):
         # Add soft constraint randomizing each bit
         for b in range(self.width):
             bv = random.randint(0,1)
-            solver.add_soft(Extract(b,b,self._rand_) == bv, weight=100)
+            solver.add_soft(z3.Extract(b,b,self._rand_) == bv, weight=100)
 
     def __getitem__(self, key):
         if isinstance(key, slice):

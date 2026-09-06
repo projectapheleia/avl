@@ -4,13 +4,16 @@
 # Description:
 # Apheleia Verification Library Coverpoint
 
+from __future__ import annotations
+
 from math import sqrt
 from typing import Any
 
-import pandas as pd
-
+from ._lazy import lazy_import
 from .component import Component
 from .var import Var
+
+pd = lazy_import("pandas")
 
 
 class Coverbin(Component):

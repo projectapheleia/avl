@@ -7,8 +7,11 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-import tabulate
 from cocotb.regression import RegressionManager
+
+from ._lazy import lazy_import
+
+tabulate = lazy_import("tabulate")
 
 # Monkey patching regression manager
 # Allows factory to be cleared between tests

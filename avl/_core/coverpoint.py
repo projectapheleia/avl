@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-import pandas as pd
-
+from ._lazy import lazy_import
 from .component import Component
 from .coverbin import Coverbin
+
+pd = lazy_import("pandas")
 
 if TYPE_CHECKING:
     from .covergroup import Covergroup

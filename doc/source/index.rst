@@ -28,6 +28,7 @@ Apheleia Verification Library Documentation
    coverage/coverage_report
    templates/templates
    visualization/visualization
+   benchmarks/benchmarks
    modules/all_modules
 
 Additional Libraries / UVCs

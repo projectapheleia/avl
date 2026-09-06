@@ -3,14 +3,17 @@
 # Description:
 # Apheleia Verification Library Variable Class
 
+from __future__ import annotations
+
 import random
 import warnings
 from collections.abc import Callable, Hashable
 from typing import Any
 
-from z3 import BitVec, Or
-
+from ._lazy import lazy_import
 from .logic import Logic
+
+z3 = lazy_import("z3")
 
 
 class Enum(Logic):
@@ -121,7 +124,7 @@ class Enum(Logic):
         """
         return (min(self.values.values()), max(self.values.values()))
 
-    def _z3_(self) -> BitVec:
+    def _z3_(self) -> z3.BitVec:
         """
         Return the Z3 representation of the variable.
         :return: The Z3 representation of the variable.
@@ -129,7 +132,7 @@ class Enum(Logic):
         """
         self.add_constraint(
             "_c_range_",
-            lambda x: Or([x == v for v in self.values.values()]),
+            lambda x: z3.Or([x == v for v in self.values.values()]),
             hard=True,
         )
         return super()._z3_()

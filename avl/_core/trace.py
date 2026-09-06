@@ -3,16 +3,20 @@
 # Description:
 # Apheleia Verification Library Trace
 
+from __future__ import annotations
+
 import os
 from collections.abc import MutableMapping, MutableSequence
 
 import cocotb
 import cocotb.utils
-import pandas as pd
 
+from ._lazy import lazy_import
 from .component import Component
 from .factory import Factory
 from .list import List
+
+pd = lazy_import("pandas")
 
 
 class Trace(Component):

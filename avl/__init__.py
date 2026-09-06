@@ -148,3 +148,6 @@ from ._core import (
 from ._core import (
     Visualization as Visualization,
 )
+from ._core import (
+    __version__ as __version__,
+)

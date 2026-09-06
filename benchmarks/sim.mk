@@ -1,7 +1,7 @@
-#Copyright 2024 Apheleia
+#Copyright 2026 Apheleia
 #
 #Description:
-# Apheleia Verification Library (AVL) Example
+# Apheleia Verification Library (AVL) Benchmark
 
 # Makefile
 
@@ -12,20 +12,18 @@ COMPILE_ARGS         +=
 
 # TOPLEVEL is the name of the toplevel module in your Verilog or VHDL file
 TOPLEVEL             := example_hdl
-PYTHONPATH           := $(CURDIR)/cocotb$(if $(PYTHONPATH),:$(PYTHONPATH))
-# cocotb >= 2.0 no longer exports PYTHONPATH from its own makefiles
-export PYTHONPATH
 
 # MODULE is the basename of the Python test file(s)
-MODULE               ?= example
+MODULE               ?= benchmark
+
+# cocotb >= 2.0 no longer exports PYTHONPATH from its own makefiles
+PYTHONPATH           := $(CURDIR)/cocotb$(if $(PYTHONPATH),:$(PYTHONPATH))
+export PYTHONPATH
 
 # Questa / ModelSim workaround
 VSIM_ARGS            += -lib work
 
-# Enable VCD trace from Verilator
-ifeq ($(SIM), verilator)
-EXTRA_ARGS           += --trace --trace-structs
-endif
+# Benchmarks measure start-up cost only - never enable waveform tracing here.
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim

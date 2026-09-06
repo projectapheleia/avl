@@ -9,16 +9,31 @@ import random
 import struct
 import warnings
 from collections.abc import Callable
+from functools import cache
 from typing import Any
 
-import numpy as np
-from z3 import FP, BitVec, BitVecNumRef, Extract, FPSort, Not, Optimize, fpBVToFP, fpIsInf, fpIsNaN
-
+from ._lazy import lazy_import
 from .var import Var
 
-FP16 = FPSort(5, 11)
-FP32 = FPSort(8, 24)
-FP64 = FPSort(11, 53)
+np = lazy_import("numpy")
+z3 = lazy_import("z3")
+
+
+@cache
+def _fp_sort_(ebits: int, sbits: int) -> Any:
+    """
+    Return the Z3 floating point sort with the given exponent and significand widths.
+
+    Built on first use, so that importing avl does not import z3.
+
+    :param ebits: Number of exponent bits.
+    :type ebits: int
+    :param sbits: Number of significand bits.
+    :type sbits: int
+    :return: The Z3 FP sort.
+    :rtype: z3.FPSortRef
+    """
+    return z3.FPSort(ebits, sbits)
 
 class Fp16(Var):
     def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
@@ -50,7 +65,7 @@ class Fp16(Var):
 
             v = other.value if isinstance(other, type(self)) else other
 
-            if isinstance(v, BitVecNumRef):
+            if isinstance(v, z3.BitVecNumRef):
                 return np.frombuffer(struct.pack("H", v.as_long()), dtype=np.float16)[0]
 
             return np.float16(v)
@@ -64,16 +79,16 @@ class Fp16(Var):
         """
         return (-np.finfo(self.value).max, np.finfo(self.value).max)
 
-    def _z3_(self) -> FP:
+    def _z3_(self) -> z3.FP:
         """
         Get the Z3 representation of the variable.
 
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FP16)
+        return z3.FP(f"{self._idx_}", _fp_sort_(5, 11))
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -85,15 +100,15 @@ class Fp16(Var):
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP16
+        bv = z3.BitVec(f"{self._idx_}", self.width)
+        fp = _fp_sort_(5, 11)
 
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
 
-        solver.add(Not(fpIsNaN(self._rand_)))
-        solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
+        solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
+        solver.add(z3.Not(z3.fpIsInf(self._rand_)))
+        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
     def _random_value_(self, bounds: tuple[float, float]|None = None) -> np.float16:
         """
@@ -198,20 +213,20 @@ class Fp32(Fp16):
             warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in cast")
 
             v = other.value if isinstance(other, type(self)) else other
-            if isinstance(v, BitVecNumRef):
+            if isinstance(v, z3.BitVecNumRef):
                 return np.frombuffer(struct.pack("I", v.as_long()), dtype=np.float32)[0]
             return np.float32(v)
 
-    def _z3_(self) -> FP:
+    def _z3_(self) -> z3.FP:
         """
         Get the Z3 representation of the variable.
 
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FP32)
+        return z3.FP(f"{self._idx_}", _fp_sort_(8, 24))
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -223,15 +238,15 @@ class Fp32(Fp16):
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP32
+        bv = z3.BitVec(f"{self._idx_}", self.width)
+        fp = _fp_sort_(8, 24)
 
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
 
-        solver.add(Not(fpIsNaN(self._rand_)))
-        solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
+        solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
+        solver.add(z3.Not(z3.fpIsInf(self._rand_)))
+        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
 class Fp64(Fp16):
     def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
@@ -262,7 +277,7 @@ class Fp64(Fp16):
             warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in cast")
 
             v = other.value if isinstance(other, type(self)) else other
-            if isinstance(v, BitVecNumRef):
+            if isinstance(v, z3.BitVecNumRef):
                 return np.frombuffer(struct.pack("Q", v.as_long()), dtype=np.float64)[0]
             return np.float64(v)
 
@@ -275,16 +290,16 @@ class Fp64(Fp16):
         """
         return (-1e100, 1e100) # Reduced to allow randomization
 
-    def _z3_(self) -> FP:
+    def _z3_(self) -> z3.FP:
         """
         Get the Z3 representation of the variable.
 
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return FP(f"{self._idx_}", FPSort(11,53))
+        return z3.FP(f"{self._idx_}", _fp_sort_(11, 53))
 
-    def _apply_constraints_(self, solver : Optimize) -> None:
+    def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
 
@@ -296,15 +311,15 @@ class Fp64(Fp16):
 
         Var._apply_constraints_(self, solver)
 
-        bv = BitVec(f"{self._idx_}", self.width)
-        fp = FP64
+        bv = z3.BitVec(f"{self._idx_}", self.width)
+        fp = _fp_sort_(11, 53)
 
         for b in range(self.width):
-            solver.add_soft(Extract(b,b,bv) == random.randint(0,1), weight=100)
+            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
 
-        solver.add(Not(fpIsNaN(self._rand_)))
-        solver.add(Not(fpIsInf(self._rand_)))
-        solver.add(self._rand_ == fpBVToFP(bv, fp))
+        solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
+        solver.add(z3.Not(z3.fpIsInf(self._rand_)))
+        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
 Half = Fp16
 Float = Fp32

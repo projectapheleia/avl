@@ -8,11 +8,14 @@ import logging
 import os
 import re
 
-import pandas as pd
-import tabulate
-import yaml
 from cocotb.regression import SimFailure
 from cocotb.utils import get_sim_time
+
+from ._lazy import lazy_import
+
+pd = lazy_import("pandas")
+tabulate = lazy_import("tabulate")
+yaml = lazy_import("yaml")
 
 # Setup Logging
 # Done at top level as must be done early to catch all startup messages
