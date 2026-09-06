@@ -132,6 +132,57 @@ TObject = TypeVar("TObject", bound="Object")
 
 class Object:
 
+    # Defaults held on the class. Construction only writes the attributes that
+    # carry real per-object state; the rest are shared until something needs to
+    # change them.
+
+    _field_attributes_ = {}
+    """Empty per-field formatting and comparison settings, shared by every
+    object that has none of its own. ``_own_field_attributes_`` replaces
+    this with a per-instance copy before anything is added.
+    """
+
+    _constraints_ = {True: {}, False: {}}
+    """Empty hard and soft constraint dictionaries, shared by every object that
+    has none of its own. ``_own_constraints_`` replaces this with a
+    per-instance copy before anything is added.
+    """
+
+    _table_fmt_ = "grid"
+    """``tabulate`` table format used by ``str()``."""
+
+    _table_transpose_ = False
+    """Transpose the table produced by ``str()``."""
+
+    _table_recurse_ = True
+    """Recurse into nested objects when producing the table for ``str()``."""
+
+    def _own_field_attributes_(self) -> dict:
+        """
+        Return this object's own field attribute dictionary, creating it if the
+        object is still sharing the empty class-level default.
+
+        :return: The field attribute dictionary.
+        :rtype: dict
+        """
+        attributes = self._field_attributes_
+        if attributes is Object._field_attributes_:
+            attributes = self._field_attributes_ = {}
+        return attributes
+
+    def _own_constraints_(self) -> dict[bool, dict]:
+        """
+        Return this object's own constraint dictionaries, creating them if the
+        object is still sharing the empty class-level default.
+
+        :return: The hard and soft constraint dictionaries.
+        :rtype: dict[bool, dict]
+        """
+        constraints = self._constraints_
+        if constraints is Object._constraints_:
+            constraints = self._constraints_ = {True: {}, False: {}}
+        return constraints
+
     def __copy__(self) -> Object:
         cls = self.__class__
         new_obj = cls.__new__(cls)
@@ -194,6 +245,13 @@ class Object:
         # Validate we have required parameters
         if name is None:
             raise TypeError(f"{cls.__name__} requires 'name' parameter")
+
+        # Nothing is registered in the factory, so there is no override to look
+        # up and no need to build an instance path for one. This is the common
+        # case, and building the path means walking the whole parent chain.
+        if Factory._empty:
+            return super().__new__(cls)
+
         path = name
 
         # No factory for hidden Objects
@@ -222,17 +280,6 @@ class Object:
         """
         self.name = name
         self._parent_ = parent
-
-        # Field attributes
-        self._field_attributes_ = {}
-
-        # Randomness and constraints
-        self._constraints_ = {True : {}, False: {}}
-
-        # Table format for string representation
-        self._table_fmt_ = "grid"
-        self._table_transpose_ = False
-        self._table_recurse_ = True
 
     def __str__(self) -> str:
         """
@@ -361,7 +408,7 @@ class Object:
         :param compare: Whether to compare the field.
         :type compare: bool
         """
-        self._field_attributes_[name] = {"fmt": fmt, "compare": compare}
+        self._own_field_attributes_()[name] = {"fmt": fmt, "compare": compare}
 
     def get_field_attributes(self, name: str) -> dict[str, Any]:
         """
@@ -381,7 +428,7 @@ class Object:
         :param name: Field name.
         :type name: str
         """
-        del self._field_attributes_[name]
+        del self._own_field_attributes_()[name]
 
     def set_table_fmt(self, fmt: str|None = None, transpose : bool|None = None, recurse : bool|None = None) -> None:
         """
@@ -561,12 +608,13 @@ class Object:
         """
         # Add the constraint
         if target is None:
-            if name in self._constraints_[hard]:
+            constraints = self._own_constraints_()
+            if name in constraints[hard]:
                 warnings.warn(f"Overriding existing constraint : {name}",
                               UserWarning,
                               stacklevel=2)
 
-            self._constraints_[hard][name] = (constraint, [*args])
+            constraints[hard][name] = (constraint, [*args])
         else:
             if name in target[hard]:
                 warnings.warn(f"Overriding existing constraint : {name}",

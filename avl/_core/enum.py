@@ -74,13 +74,8 @@ class Enum(Logic):
         for k, v in values.items():
             setattr(self, k, v)
 
-        if value in values.keys():
-            self.value = values[value]
-        elif value in values.values():
-            self.value = value
-        else:
-            raise ValueError(f"Value {value} is not in the list of values {values}")
-
+        # _cast_ resolves a name or a value and raises if it is neither, so
+        # there is no need to check and assign the value here as well.
         super().__init__(value, auto_random=auto_random, fmt=fmt, width=max(values.values()).bit_length())
 
     def _cast_(self, other: Any) -> Any:
@@ -97,7 +92,7 @@ class Enum(Logic):
         if not isinstance(v, Hashable):
             v = int(v)
 
-        if v in self.values.keys():
+        if v in self.values:
             return self.values[v]
         elif v in self.values.values():
             return v

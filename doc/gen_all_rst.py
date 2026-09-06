@@ -33,7 +33,6 @@ def main():
 .. automodule:: {modname}
    :members:
    :undoc-members:
-   :private-members:
 """)
 
     # Write a toctree index you can include in index.rst

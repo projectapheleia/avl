@@ -3,23 +3,23 @@
 # Description:
 # Apheleia Verification Library Variable Class
 
-from collections.abc import Callable
 from typing import Any
 
 from .logic import Logic
 
 
 class Bool(Logic):
-    def __init__(self, *args, auto_random: bool = True, fmt : Callable[..., str] = str) -> None:
-        """
-        Initialize an instance of the Bool class.
+    width = 1
+    """Width in bits. A boolean is a single bit."""
 
-        :param value: The initial value of the instance.
-        :type value: bool
-        :param auto_random: Flag indicating whether the instance should be automatically randomized, defaults to True.
-        :type auto_random: bool, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=1)
+    _mask_ = 1
+    """Mask of one set bit, applied when a value is assigned."""
+
+    _fixed_width_ = True
+    """The width is part of the type, so a caller may not override it."""
+
+    _default_fmt_ = str
+    """Booleans print as ``True``/``False`` rather than hexadecimal."""
 
     def _cast_(self, other: Any) -> int:
         """

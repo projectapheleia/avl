@@ -18,6 +18,25 @@ z3 = lazy_import("z3")
 
 class Logic(Var):
 
+    width = 32
+    """Width of the variable in bits. Fixed per class for every sized subclass
+    (``Uint8``, ``Int32``, ``Bool``, ...), and only copied onto an instance
+    when a caller asks for a different width.
+    """
+
+    _mask_ = (1 << 32) - 1
+    """Mask of :attr:`width` set bits, applied when a value is assigned. Held
+    beside the width so that casting never has to recompute it.
+    """
+
+    _default_fmt_ = hex
+    """Logic values print as hexadecimal unless the caller supplies a format."""
+
+    _fixed_width_ = False
+    """True on subclasses whose width is part of the type and may not be
+    overridden by the caller.
+    """
+
     def __copy__(self):
         """
         Copy the Logic - always make a copy to ensure randomness is preserved.
@@ -35,8 +54,8 @@ class Logic(Var):
         self,
         *args,
         auto_random: bool = True,
-        fmt: Callable[..., str] = hex,
-        width: int = 32
+        fmt: Callable[..., str] | None = None,
+        width: int | None = None
     ) -> None:
         """
         Initialize an instance of the class.
@@ -45,15 +64,20 @@ class Logic(Var):
         :type value: any
         :param auto_random: Indicates if the variable should be automatically randomized, defaults to True.
         :type auto_random: bool, optional
-        :param fmt: The format of the variable, defaults to hex.
+        :param fmt: The format of the variable, defaults to the class format.
         :type fmt: type, optional
-        :param width: The width of the variable in bits, defaults to 32.
+        :param width: The width of the variable in bits, defaults to the class width.
         :type width: int, optional
         :raises ValueError: If the width is not a positive integer.
         """
-        if not isinstance(width, int) or width <= 0:
-            raise ValueError("Width must be a positive integer.")
-        self.width = int(width)
+        if width is not None:
+            if self._fixed_width_:
+                raise TypeError(f"{type(self).__name__} has a fixed width of {self.width}")
+            if not isinstance(width, int) or width <= 0:
+                raise ValueError("Width must be a positive integer.")
+            if width != self.width:
+                self.width = width
+                self._mask_ = (1 << width) - 1
 
         super().__init__(*args, auto_random=auto_random, fmt=fmt)
 
@@ -67,7 +91,7 @@ class Logic(Var):
         :rtype: int
         """
         v = other.value if isinstance(other, Logic) else other
-        return int(v) & self._range_()[1]
+        return int(v) & self._mask_
 
     def _wrap_(self, result : Any) -> Logic:
         """
@@ -87,7 +111,7 @@ class Logic(Var):
         :return: A tuple containing the minimum and maximum values.
         :rtype: tuple[int, int]
         """
-        return (0, (1 << self.width) - 1)
+        return (0, self._mask_)
 
     def _z3_(self) -> z3.BitVecRef:
         """

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import Any
 
 from .uint import Uint
@@ -27,28 +26,6 @@ class Int(Uint):
         new_obj.__class__ = self.__class__
         return  new_obj
 
-    def __init__(
-        self,
-        *args,
-        auto_random: bool = True,
-        fmt: Callable[..., str] = str,
-        width: int = 32
-    ) -> None:
-        """
-        Initialize an instance of the class.
-
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        :param width: The width of the variable in bits, defaults to 32.
-        :type width: int, optional
-        :raises ValueError: If the width is not a positive integer.
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=width)
-
     def _cast_(self, other: Any) -> int:
         """
         Cast the value to the appropriate type based on the width of the variable.
@@ -59,9 +36,10 @@ class Int(Uint):
         :rtype: int
         """
         v = other.value if isinstance(other, Var) else other
-        (_min_, _) = self._range_()
+        mask = self._mask_
+        minimum = -(mask >> 1) - 1
 
-        return int((v - _min_) % (1 << self.width)) + _min_
+        return int((v - minimum) % (mask + 1)) + minimum
 
     def _range_(self) -> tuple[int, int]:
         """
@@ -70,23 +48,20 @@ class Int(Uint):
         :return: A tuple containing the minimum and maximum values.
         :rtype: tuple[int, int]
         """
-        return (-(1 << (self.width - 1)), (1 << (self.width - 1)) - 1)
+        half = self._mask_ >> 1
+        return (-half - 1, half)
 
 class Int8(Int):
-    def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
-    ) -> None:
-        """
-        Initialize an instance of the class.
+    width = 8
+    """Width in bits. Declared here so that constructing one costs no
+    per-instance width attribute.
+    """
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=8)
+    _mask_ = (1 << 8) - 1
+    """Mask of 8 set bits, applied when a value is assigned."""
+
+    _fixed_width_ = True
+    """The width is part of the type, so a caller may not override it."""
 
     def _wrap_(self, result : Any) -> Int8:
         """
@@ -100,20 +75,16 @@ class Int8(Int):
         return type(self)(result, auto_random=self._auto_random_, fmt=self._fmt_)
 
 class Int16(Int):
-    def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
-    ) -> None:
-        """
-        Initialize an instance of the class.
+    width = 16
+    """Width in bits. Declared here so that constructing one costs no
+    per-instance width attribute.
+    """
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=16)
+    _mask_ = (1 << 16) - 1
+    """Mask of 16 set bits, applied when a value is assigned."""
+
+    _fixed_width_ = True
+    """The width is part of the type, so a caller may not override it."""
 
     def _wrap_(self, result : Any) -> Int16:
         """
@@ -127,20 +98,16 @@ class Int16(Int):
         return type(self)(result, auto_random=self._auto_random_, fmt=self._fmt_)
 
 class Int32(Int):
-    def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
-    ) -> None:
-        """
-        Initialize an instance of the class.
+    width = 32
+    """Width in bits. Declared here so that constructing one costs no
+    per-instance width attribute.
+    """
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=32)
+    _mask_ = (1 << 32) - 1
+    """Mask of 32 set bits, applied when a value is assigned."""
+
+    _fixed_width_ = True
+    """The width is part of the type, so a caller may not override it."""
 
     def _wrap_(self, result : Any) -> Int32:
         """
@@ -154,20 +121,16 @@ class Int32(Int):
         return type(self)(result, auto_random=self._auto_random_, fmt=self._fmt_)
 
 class Int64(Int):
-    def __init__(
-        self, *args, auto_random: bool = True, fmt: Callable[..., str] = str
-    ) -> None:
-        """
-        Initialize an instance of the class.
+    width = 64
+    """Width in bits. Declared here so that constructing one costs no
+    per-instance width attribute.
+    """
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to str.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt, width=64)
+    _mask_ = (1 << 64) - 1
+    """Mask of 64 set bits, applied when a value is assigned."""
+
+    _fixed_width_ = True
+    """The width is part of the type, so a caller may not override it."""
 
     def _wrap_(self, result : Any) -> Int64:
         """

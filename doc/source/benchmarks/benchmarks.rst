@@ -117,16 +117,143 @@ There is nothing to configure and no change to any public API. The first testben
 to touch a deferred feature pays that library's import cost at that point instead
 of at start-up; a testbench that never touches it never pays at all.
 
+Object Creation
+---------------
+
+A testbench builds transactions constantly - one per bus item, one per sequence
+item, thousands per test - so the cost of constructing an AVL object and its
+variables is paid over and over. Building a transaction with six variables used to
+take 44 microseconds; it now takes 10.
+
+Results
+^^^^^^^
+
+Measured on a transaction carrying one of each variable type, and on four
+different transaction classes built round-robin so that nothing depends on the
+same class being constructed repeatedly. The base here is the tree as it stood
+after the start-up work above, not the 1.0.1 release.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 40 20 20 20
+
+   * - Measurement
+     - Base
+     - Optimised
+     - Change
+   * - Transaction with 6 variables
+     - 43.92 us
+     - **10.47 us**
+     - -76.2 %
+   * - Four classes, round-robin
+     - 36.13 us
+     - **8.47 us**
+     - -76.5 %
+
+.. image:: /images/avl_objects_transaction.png
+   :align: center
+   :alt: Base versus optimised construction time for a transaction with six variables and for four transaction classes built in turn.
+
+Building 1000 transactions went from 44 ms to 10 ms.
+
+Per Type
+^^^^^^^^
+
+.. image:: /images/avl_objects_breakdown.png
+   :align: center
+   :alt: Base versus optimised construction time for each AVL object and variable type, from avl.Object at around one microsecond to avl.Fp32 at fifteen.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - Type
+     - Base
+     - Optimised
+     - Change
+   * - :doc:`avl.Object </modules/avl._core.object>`
+     - 1.08 us
+     - 0.64 us
+     - -41.2 %
+   * - :doc:`avl.Transaction </modules/avl._core.transaction>`
+     - 1.23 us
+     - 0.72 us
+     - -41.5 %
+   * - :doc:`avl.Logic </modules/avl._core.logic>` (64 bit)
+     - 3.75 us
+     - 1.35 us
+     - -64.0 %
+   * - :doc:`avl.Uint32 </modules/avl._core.uint>`
+     - 4.61 us
+     - 1.01 us
+     - -78.2 %
+   * - :doc:`avl.Int16 </modules/avl._core.int>`
+     - 5.34 us
+     - 1.11 us
+     - -79.2 %
+   * - :doc:`avl.Bool </modules/avl._core.bool>`
+     - 3.84 us
+     - 1.02 us
+     - -73.4 %
+   * - :doc:`avl.Enum </modules/avl._core.enum>`
+     - 5.59 us
+     - 2.27 us
+     - -59.4 %
+   * - :doc:`avl.Fp32 </modules/avl._core.float>`
+     - 14.96 us
+     - 1.26 us
+     - -91.6 %
+
+Where the Time Went
+^^^^^^^^^^^^^^^^^^^
+
+**Per-instance state that was really per-class.** Every variable stored its own
+copy of values fixed for its type - the width and its mask, the numpy scalar type
+of a float, the format callable, an empty constraint dictionary. A
+:doc:`avl.Uint8 </modules/avl._core.uint>` wrote its width on every instance even
+though a ``Uint8`` is 8 bits by definition. These are now class attributes, and an
+instance is only given its own copy when it actually differs - a ``Logic``
+constructed with a non-default width, or a variable that has a constraint added to
+it. The same applies to ``Object`` and ``Transaction``, whose table formatting
+settings, transaction id and empty dictionaries all moved to the class.
+
+**A global registry every variable joined.** Construction allocated an index and
+inserted the variable into a module-level weak dictionary. That index exists only
+to name the variable in Z3 and to map a solution back to it, so a variable that is
+never randomized never needed one. The index is now allocated the first time it is
+read.
+
+**The factory was consulted whether or not it was used.** Creating an object built
+an instance path - walking the whole parent chain and formatting a string - and
+then asked the factory for an override, even when nothing had ever been
+registered. The factory now tracks whether it is empty, and object creation
+returns immediately when it is. Testbenches that use the factory are unaffected.
+
+**A warning suppressed on every float cast.** The floating point types wrapped
+every cast in ``warnings.catch_warnings()`` to hide a numpy overflow warning,
+which recompiles a regular expression each time. That was 11 of the 15
+microseconds it took to build an ``Fp32``. The cast now checks the value against
+the type's maximum and only takes that path when the value really can overflow.
+
+**Constructors that did nothing but forward.** ``Uint32`` called ``Uint`` called
+``Logic`` called ``Var`` - five frames for an ``Int16``, each repacking its
+arguments. The intermediate layers existed only to change a default format or pin
+a width, both of which are now class attributes, so they are gone. A fixed-width
+type still rejects an explicit width, so ``avl.Uint8(0, width=16)`` raises rather
+than silently producing a 16 bit value.
+
+None of this changes how objects or variables are used, and no public API changed.
+
 Running Your Own Measurements
 -----------------------------
 
-These figures were collected on a single machine at the time the changes were made,
-using Verilator 5.040, cocotb 2.1.0 and Python 3.12.3. Absolute numbers depend
-heavily on the machine, the simulator and the Python installation, so treat them as
-an indication of scale rather than as values to expect.
+All the figures above were collected on a single machine at the time the changes
+were made, using Verilator 5.040, cocotb 2.1.0 and Python 3.12.3. Absolute numbers
+depend heavily on the machine, the simulator and the Python installation, so treat
+them as an indication of scale rather than as values to expect.
 
-The benchmark used to produce them ships with AVL, and you are encouraged to run it
-on your own setup - either to confirm the improvement or to check that a change of
-your own has not regressed start-up time. See
+The benchmarks used to produce them ship with AVL, and you are encouraged to run
+them on your own setup - either to confirm the improvements or to check that a
+change of your own has not regressed start-up or object creation time. See
 `benchmarks/README.md <https://github.com/projectapheleia/avl/blob/main/benchmarks/README.md>`_
 for what the benchmark measures and how to record and compare runs.

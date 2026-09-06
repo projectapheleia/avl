@@ -18,17 +18,103 @@ from ._lazy import lazy_import
 z3 = lazy_import("z3")
 
 
+class _Index:
+    """
+    Descriptor that allocates a variable's index the first time it is read.
+
+    Only randomization needs an index - it is what names the variable in Z3 and
+    what maps a Z3 model back to the variable through ``Var._lookup_``. Because
+    this is a non-data descriptor it is shadowed by the instance attribute it
+    writes, so a variable that is never randomized never enters the lookup
+    table and never pays for the weak reference.
+    """
+
+    def __get__(self, obj: Var | None, objtype: type | None = None) -> Any:
+        if obj is None:
+            return self
+        idx = Var._count_
+        Var._count_ = idx + 1
+        Var._lookup_[idx] = obj
+        obj.__dict__["_idx_"] = idx
+        return idx
+
+
 class Var:
     _deprecated_name_warning_ = True
     _count_ = 0
     _lookup_ = weakref.WeakValueDictionary()
     _AVL_CONSTRAINT_DEBUG_ = os.environ.get("AVL_CONSTRAINT_DEBUG") is not None
 
+    # Defaults held on the class. An instance only takes a copy of one of these
+    # when it actually differs, which keeps construction down to the attributes
+    # that carry real per-variable state.
+
+    _idx_ = _Index()
+    """Index that names the variable in Z3 and finds it again in ``_lookup_``.
+    Allocated the first time it is read, so a variable that is never
+    randomized is never registered.
+    """
+
+    name = "**deprecated**"
+    """Placeholder name. Passing a name to a variable is deprecated, so this is
+    shared by every variable that has not been given one.
+    """
+
+    _rand_ = None
+    """Z3 handle for the variable, created during randomization."""
+
+    _file_ = None
+    """Source file the variable was created in. Only populated when
+    ``AVL_CONSTRAINT_DEBUG`` is set in the environment.
+    """
+
+    _line_ = None
+    """Source line the variable was created on. Only populated when
+    ``AVL_CONSTRAINT_DEBUG`` is set in the environment.
+    """
+
+    _varname_ = None
+    """Name of the Python variable this was assigned to. Only populated when
+    ``AVL_CONSTRAINT_DEBUG`` is set in the environment.
+    """
+
+    _constraints_ = {True: {}, False: {}}
+    """Empty hard and soft constraint dictionaries, shared by every variable
+    that has none of its own. ``_own_constraints_`` replaces this with a
+    per-instance copy before anything is added.
+    """
+
+    _default_fmt_ = str
+    """Format applied by ``str()`` and ``repr()`` when the caller does not
+    supply one. Subclasses override it instead of repeating a default in
+    every signature.
+    """
+
     @staticmethod
     def _register_(new_var : Var) -> None:
-        Var._lookup_[Var._count_] = new_var
-        new_var._idx_ = Var._count_
-        Var._count_ += 1
+        """
+        Force a variable into the global lookup table.
+
+        Registration is normally deferred until the index is first needed; this
+        makes it happen now.
+
+        :param new_var: The variable to register.
+        :type new_var: Var
+        """
+        new_var._idx_  # noqa: B018 - reading the index is what registers it
+
+    def _own_constraints_(self) -> dict[bool, dict]:
+        """
+        Return this variable's own constraint dictionaries, creating them if it
+        is still sharing the empty class-level default.
+
+        :return: The hard and soft constraint dictionaries.
+        :rtype: dict[bool, dict]
+        """
+        constraints = self._constraints_
+        if constraints is Var._constraints_:
+            constraints = self._constraints_ = {True: {}, False: {}}
+        return constraints
 
     def __copy__(self) -> Var:
         """
@@ -76,7 +162,7 @@ class Var:
             return frame_info
         return None
 
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
+    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] | None = None) -> None:
         """
         Initialize an instance of the class.
 
@@ -84,34 +170,25 @@ class Var:
         :type value: Any
         :param auto_random: Flag to enable or disable automatic randomness. Defaults to True.
         :type auto_random: bool, optional
+        :param fmt: The format to be used. Defaults to the class format.
+        :type fmt: Callable, optional
         """
 
-        if len(args) > 1 and self.__class__._deprecated_name_warning_:
+        nargs = len(args)
+        if nargs > 1 and self.__class__._deprecated_name_warning_:
             warnings.warn(
                 "Passing 'name' as a positional argument is deprecated",
                 DeprecationWarning,
                 stacklevel=2
             )
             self.__class__._deprecated_name_warning_ = False
-        assert len(args) == 1 or len(args) == 2, f"Unsupported number of args: {args}"
+        assert nargs == 1 or nargs == 2, f"Unsupported number of args: {args}"
 
-        # Lookup
-        self._idx_ = -1
-        Var._register_(self)
-
-        self.name = "**deprecated**"
-        self.value = args[-1]
+        # The index, name, seed value, constraints and debug location all have
+        # class-level defaults; only what differs is stored on the instance.
+        self._value_ = self._cast_(args[-1])
         self._auto_random_ = auto_random
-        self._fmt_ = fmt
-
-        # Randomness and constraints
-        self._rand_ = None
-        self._constraints_ = {True : {}, False: {}}
-
-        # Debug
-        self._file_ = None
-        self._line_ = None
-        self._varname_ = None
+        self._fmt_ = self._default_fmt_ if fmt is None else fmt
 
         if Var._AVL_CONSTRAINT_DEBUG_:
             frame = self._extract_caller_frame_()
@@ -119,8 +196,6 @@ class Var:
                 self._file_ = frame.filename
                 self._line_ = frame.lineno
                 self._varname_ = self._extract_varname_(frame.code_context)
-            else:
-                self._file_ = self._line_ = self._varname_ = None
 
         # z3 object creation removed
         # created as part of randomization to speed up non-randomized object creation
@@ -350,12 +425,13 @@ class Var:
             raise ValueError("Cannot add constraints to non-random variables")
 
         if target is None:
-            if name in self._constraints_[hard]:
+            constraints = self._own_constraints_()
+            if name in constraints[hard]:
                 warnings.warn(f"Overriding existing constraint : {name}",
                               UserWarning,
                               stacklevel=2)
 
-            self._constraints_[hard][name] = constraint
+            constraints[hard][name] = constraint
         else:
             if name in target:
                 warnings.warn(f"Overriding existing constraint : {name}",

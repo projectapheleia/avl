@@ -48,7 +48,12 @@ class LazyModule(ModuleType):
         return module
 
     def __getattr__(self, name: str) -> Any:
-        return getattr(self._resolve_(), name)
+        value = getattr(self._resolve_(), name)
+        # Cache on the stand-in itself. __getattr__ is only consulted when the
+        # normal lookup fails, so every subsequent use of this attribute costs
+        # an ordinary dictionary lookup rather than a call into here.
+        self.__dict__[name] = value
+        return value
 
     def __dir__(self) -> list[str]:
         return dir(self._resolve_())

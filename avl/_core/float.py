@@ -8,7 +8,6 @@ from __future__ import annotations
 import random
 import struct
 import warnings
-from collections.abc import Callable
 from functools import cache
 from typing import Any
 
@@ -35,23 +34,52 @@ def _fp_sort_(ebits: int, sbits: int) -> Any:
     """
     return z3.FPSort(ebits, sbits)
 
+
+@cache
+def _np_type_(name: str) -> Any:
+    """
+    Return a numpy scalar type by name.
+
+    Resolved on first use and cached, so that defining these classes costs
+    nothing and does not import numpy.
+
+    :param name: The numpy scalar type name, for example "float32".
+    :type name: str
+    :return: The numpy scalar type.
+    :rtype: type
+    """
+    return getattr(np, name)
+
 class Fp16(Var):
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
-        """
-        Initialize an instance of the class.
+    """Half precision floating point variable."""
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to hex.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt)
-        self._bits_ = np.uint16(0)
-        self.width = 16
+    # Everything that is fixed for the type lives on the class, so constructing
+    # a variable stores only its value.
 
-    def _cast_(self, other: Any) -> np.float16:
+    width = 16
+    """Width of the variable in bits."""
+
+    _value_dtype_ = "float16"
+    """Name of the numpy scalar type values are held as. Held as a name so that
+    defining the class does not import numpy; ``_np_type_`` resolves it.
+    """
+
+    _bits_dtype_ = "uint16"
+    """Name of the numpy integer type of the same width, used by ``to_bits``
+    and ``from_bits``.
+    """
+
+    _bits_format_ = "H"
+    """``struct`` format code of the same width, used to unpack a Z3 bit vector
+    back into a float during randomization.
+    """
+
+    _max_ = 65504.0
+    """Largest representable magnitude. A cast only has to suppress numpy's
+    overflow warning when the value falls outside it.
+    """
+
+    def _cast_(self, other: Any) -> Any:
         """
         Cast the other value to the type of this variable's value.
 
@@ -60,15 +88,21 @@ class Fp16(Var):
         :return: The casted value.
         :rtype: Any
         """
+        v = other.value if isinstance(other, type(self)) else other
+        cast = _np_type_(self._value_dtype_)
+
+        if isinstance(v, int | float | np.number):
+            # numpy only warns when the value does not fit the target type, so
+            # only pay for suppressing that warning when it can actually happen.
+            if -self._max_ <= v <= self._max_:
+                return cast(v)
+        elif isinstance(v, z3.BitVecNumRef):
+            # Z3 hands back a bit vector during randomization.
+            return np.frombuffer(struct.pack(self._bits_format_, v.as_long()), dtype=cast)[0]
+
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in cast")
-
-            v = other.value if isinstance(other, type(self)) else other
-
-            if isinstance(v, z3.BitVecNumRef):
-                return np.frombuffer(struct.pack("H", v.as_long()), dtype=np.float16)[0]
-
-            return np.float16(v)
+            return cast(v)
 
     def _range_(self) -> tuple[float, float]:
         """
@@ -77,7 +111,7 @@ class Fp16(Var):
         :return: A tuple containing the minimum and maximum values.
         :rtype: tuple[int, int]
         """
-        return (-np.finfo(self.value).max, np.finfo(self.value).max)
+        return (-self._max_, self._max_)
 
     def _z3_(self) -> z3.FP:
         """
@@ -131,7 +165,7 @@ class Fp16(Var):
         :return: The raw value.
         :rtype: float
         """
-        return int(self.value.view(type(self._bits_)))
+        return int(self.value.view(_np_type_(self._bits_dtype_)))
 
     def from_bits(self, raw: int) -> None:
         """
@@ -140,7 +174,7 @@ class Fp16(Var):
         :param raw: The raw value.
         :type raw: int
         """
-        self.value = type(self._bits_)(int(raw)).view(type(self.value))
+        self.value = _np_type_(self._bits_dtype_)(int(raw)).view(type(self.value))
 
     # Bitwise
     def __and__(self, _): raise NotImplementedError("Bitwise operations are not supported for floating-point variables.")
@@ -185,37 +219,22 @@ class Fp16(Var):
         return not (np.isnan(self.value) or np.isnan(other_val)) and self.value >= other_val
 
 class Fp32(Fp16):
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
-        """
-        Initialize an instance of the class.
+    """Single precision floating point variable."""
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to hex.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt)
-        self._bits_ = np.uint32(0)
-        self.width = 32
+    width = 32
+    """Width of the variable in bits."""
 
-    def _cast_(self, other: Any) -> Any:
-        """
-        Cast the other value to the type of this variable's value.
+    _value_dtype_ = "float32"
+    """Name of the numpy scalar type values are held as."""
 
-        :param other: The value to cast.
-        :type other: Any
-        :return: The casted value.
-        :rtype: Any
-        """
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in cast")
+    _bits_dtype_ = "uint32"
+    """Name of the numpy integer type of the same width."""
 
-            v = other.value if isinstance(other, type(self)) else other
-            if isinstance(v, z3.BitVecNumRef):
-                return np.frombuffer(struct.pack("I", v.as_long()), dtype=np.float32)[0]
-            return np.float32(v)
+    _bits_format_ = "I"
+    """``struct`` format code of the same width."""
+
+    _max_ = 3.4028234663852886e+38
+    """Largest representable magnitude."""
 
     def _z3_(self) -> z3.FP:
         """
@@ -249,37 +268,22 @@ class Fp32(Fp16):
         solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
 class Fp64(Fp16):
-    def __init__(self, *args, auto_random: bool = True, fmt: Callable[..., str] = str) -> None:
-        """
-        Initialize an instance of the class.
+    """Double precision floating point variable."""
 
-        :param value: The value to be assigned to the instance.
-        :type value: int
-        :param auto_random: Flag to enable automatic randomization, defaults to True.
-        :type auto_random: bool, optional
-        :param fmt: The format to be used, defaults to hex.
-        :type fmt: function, optional
-        """
-        super().__init__(*args, auto_random=auto_random, fmt=fmt)
-        self._bits_ = np.uint64(0)
-        self.width = 64
+    width = 64
+    """Width of the variable in bits."""
 
-    def _cast_(self, other: Any) -> Any:
-        """
-        Cast the other value to the type of this variable's value.
+    _value_dtype_ = "float64"
+    """Name of the numpy scalar type values are held as."""
 
-        :param other: The value to cast.
-        :type other: Any
-        :return: The casted value.
-        :rtype: Any
-        """
-        with warnings.catch_warnings():
-            warnings.filterwarnings("ignore", category=RuntimeWarning, message="overflow encountered in cast")
+    _bits_dtype_ = "uint64"
+    """Name of the numpy integer type of the same width."""
 
-            v = other.value if isinstance(other, type(self)) else other
-            if isinstance(v, z3.BitVecNumRef):
-                return np.frombuffer(struct.pack("Q", v.as_long()), dtype=np.float64)[0]
-            return np.float64(v)
+    _bits_format_ = "Q"
+    """``struct`` format code of the same width."""
+
+    _max_ = 1.7976931348623157e+308
+    """Largest representable magnitude."""
 
     def _range_(self) -> tuple[float, float]:
         """

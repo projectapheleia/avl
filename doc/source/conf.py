@@ -38,11 +38,38 @@ extensions = [
 templates_path = ['_templates']
 exclude_patterns = []
 
+# Internal attributes that configure how a class behaves - widths, masks,
+# formats, the shared empty defaults - are documented and belong in the API
+# reference. They are named explicitly so that the rest of the private members
+# stay out of the built documentation.
+_documented_private_members = [
+    '_bits_dtype_',
+    '_bits_format_',
+    '_constraints_',
+    '_default_fmt_',
+    '_empty',
+    '_events_',
+    '_field_attributes_',
+    '_file_',
+    '_fixed_width_',
+    '_id_',
+    '_idx_',
+    '_line_',
+    '_mask_',
+    '_max_',
+    '_rand_',
+    '_table_fmt_',
+    '_table_recurse_',
+    '_table_transpose_',
+    '_value_dtype_',
+    '_varname_',
+]
+
 autodoc_default_options = {
     'members': True,
     'member-order': 'bysource',
     'special-members': '__init__',
-    'private-members': False,
+    'private-members': ','.join(_documented_private_members),
     'undoc-members': True,
     'exclude-members': '__weakref__'
 }

@@ -14,6 +14,17 @@ from cocotb.utils import get_sim_time
 from .object import Object
 
 class Transaction(Object):
+    # Defaults held on the class - a transaction that is never given an id or
+    # an event stores neither.
+
+    _id_ = -1
+    """Transaction id, shared until ``set_id`` gives the transaction its own."""
+
+    _events_ = {}
+    """Empty event table, shared by every transaction that has no events.
+    ``add_event`` replaces it with a per-instance copy.
+    """
+
     def __init__(self, name: str, parent: Object|None) -> None:
         """
         Initialize a new Transaction.
@@ -22,8 +33,6 @@ class Transaction(Object):
         :type name: str
         """
         super().__init__(name, parent)
-        self._id_ = -1
-        self._events_ = {}
 
     def set_id(self, id: int) -> None:
         """
@@ -52,11 +61,15 @@ class Transaction(Object):
         :param callback: The callback function to be called when the event is set.
         :type callback: function or None
         """
-        if name not in self._events_:
-            self._events_[name] = [0, Event(), []]
+        events = self._events_
+        if events is Transaction._events_:
+            events = self._events_ = {}
+
+        if name not in events:
+            events[name] = [0, Event(), []]
 
         if callback is not None:
-            self._events_[name][2].append(callback)
+            events[name][2].append(callback)
 
     def get_event(self, name: str) -> None:
         """
