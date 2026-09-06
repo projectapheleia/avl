@@ -7,13 +7,13 @@ from __future__ import annotations
 
 import inspect
 import os
-import random
 import warnings
 import weakref
 from collections.abc import Callable
 from typing import Any
 
 from ._lazy import lazy_import
+from ._random import urandom_range
 
 z3 = lazy_import("z3")
 
@@ -269,7 +269,7 @@ class Var:
         """
         if bounds is None:
             bounds = self._range_()
-        return random.randint(bounds[0], bounds[1])
+        return urandom_range(bounds[0], bounds[1])
 
     # Binary arithmetic
     def __add__(self, other): return self._wrap_(self._cast_(self.value + other))
@@ -483,6 +483,20 @@ class Var:
 
         return any(self._constraints_.values())
 
+    def _apply_randomization_(self, solver : z3.Optimize,
+                              free_bits : list[int]|None = None) -> None:
+        """
+        Add the soft constraints that spread this variable over its legal values.
+
+        Nothing to do for a variable with no bit level representation; the types
+        that have one override this.
+
+        :param solver: The optimization solver to apply the constraints to.
+        :type solver: Optimize
+        :param free_bits: The bits worth asking about, or None for every bit.
+        :type free_bits: list[int], optional
+        """
+
     def randomize(self, hard: list|None = None, soft: list|None = None) -> None:
         """
         This method randomizes the value of the variable by considering hard and soft constraints.
@@ -505,6 +519,7 @@ class Var:
         def new_solver():
             solver = z3.Optimize()
             self._apply_constraints_(solver)
+            self._apply_randomization_(solver)
 
             return solver
 

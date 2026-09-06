@@ -79,6 +79,17 @@ class Fp16(Var):
     overflow warning when the value falls outside it.
     """
 
+    _fp_ebits_ = 5
+    """Exponent bits of the Z3 floating point sort."""
+
+    _fp_sbits_ = 11
+    """Significand bits of the Z3 floating point sort."""
+
+    _bit_clause_cache_ = None
+    """Randomization clauses over the IEEE bit pattern, keyed and armed as in
+    ``Logic._bit_clause_cache_``.
+    """
+
     def _cast_(self, other: Any) -> Any:
         """
         Cast the other value to the type of this variable's value.
@@ -120,11 +131,26 @@ class Fp16(Var):
         :return: The Z3 FP representation of the variable.
         :rtype: FP
         """
-        return z3.FP(f"{self._idx_}", _fp_sort_(5, 11))
+        return z3.FP(f"{self._idx_}", _fp_sort_(self._fp_ebits_, self._fp_sbits_))
+
+    def _z3_bits_(self) -> z3.BitVecRef:
+        """
+        The Z3 bit vector holding this variable's IEEE bit pattern.
+
+        Randomization draws over the bit pattern rather than over the float.
+
+        :return: The bit vector.
+        :rtype: z3.BitVecRef
+        """
+        return z3.BitVec(f"{self._idx_}", self.width)
 
     def _apply_constraints_(self, solver : z3.Optimize) -> None:
         """
         Apply the constraints to the solver.
+
+        Ties the float to the bit vector holding its IEEE pattern and rules out
+        NaN and the infinities. Randomization is applied separately, by
+        _apply_randomization_, which draws over that same bit vector.
 
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
@@ -134,15 +160,49 @@ class Fp16(Var):
 
         Var._apply_constraints_(self, solver)
 
-        bv = z3.BitVec(f"{self._idx_}", self.width)
-        fp = _fp_sort_(5, 11)
-
-        for b in range(self.width):
-            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
-
+        bits = self._z3_bits_()
         solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
         solver.add(z3.Not(z3.fpIsInf(self._rand_)))
-        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
+        solver.add(self._rand_ == z3.fpBVToFP(bits, _fp_sort_(self._fp_ebits_, self._fp_sbits_)))
+
+    def _apply_randomization_(self, solver : z3.Optimize,
+                              free_bits : list[int]|None = None) -> None:
+        """
+        Add the soft constraints that spread this variable over its legal values.
+
+        The draw is made over the IEEE bit pattern rather than over the float.
+        Object._free_bits_ examines only variables whose Z3 representation is a bit
+        vector, and this one's is a float, so nothing is worked out for it and every
+        bit gets asked about.
+
+        :param solver: The optimization solver to apply the constraints to.
+        :type solver: Optimize
+        :param free_bits: Always None here, see above.
+        :type free_bits: list[int], optional
+        """
+        bits = self._z3_bits_()
+
+        # One draw for the whole variable. A randint per bit costs an order of
+        # magnitude more for exactly the same randomness.
+        drawn = random.getrandbits(self.width)
+        clauses = self._bit_clause_cache_
+        positions = range(self.width) if free_bits is None else free_bits
+
+        if clauses is None:
+            # First randomization of this variable. Build the clauses without
+            # keeping them, and arm the cache for a second one.
+            self._bit_clause_cache_ = {}
+            for b in positions:
+                solver.add_soft(z3.Extract(b, b, bits) == ((drawn >> b) & 1), weight=100)
+            return
+
+        for b in positions:
+            value = (drawn >> b) & 1
+            key = b << 1 | value
+            clause = clauses.get(key)
+            if clause is None:
+                clause = clauses[key] = z3.Extract(b, b, bits) == value
+            solver.add_soft(clause, weight=100)
 
     def _random_value_(self, bounds: tuple[float, float]|None = None) -> np.float16:
         """
@@ -236,36 +296,12 @@ class Fp32(Fp16):
     _max_ = 3.4028234663852886e+38
     """Largest representable magnitude."""
 
-    def _z3_(self) -> z3.FP:
-        """
-        Get the Z3 representation of the variable.
+    _fp_ebits_ = 8
+    """Exponent bits of the Z3 floating point sort."""
 
-        :return: The Z3 FP representation of the variable.
-        :rtype: FP
-        """
-        return z3.FP(f"{self._idx_}", _fp_sort_(8, 24))
+    _fp_sbits_ = 24
+    """Significand bits of the Z3 floating point sort."""
 
-    def _apply_constraints_(self, solver : z3.Optimize) -> None:
-        """
-        Apply the constraints to the solver.
-
-        :param solver: The optimization solver to apply the constraints to.
-        :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
-        """
-
-        Var._apply_constraints_(self, solver)
-
-        bv = z3.BitVec(f"{self._idx_}", self.width)
-        fp = _fp_sort_(8, 24)
-
-        for b in range(self.width):
-            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
-
-        solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
-        solver.add(z3.Not(z3.fpIsInf(self._rand_)))
-        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
 class Fp64(Fp16):
     """Double precision floating point variable."""
@@ -285,6 +321,12 @@ class Fp64(Fp16):
     _max_ = 1.7976931348623157e+308
     """Largest representable magnitude."""
 
+    _fp_ebits_ = 11
+    """Exponent bits of the Z3 floating point sort."""
+
+    _fp_sbits_ = 53
+    """Significand bits of the Z3 floating point sort."""
+
     def _range_(self) -> tuple[float, float]:
         """
         Get the range of values that can be represented by this variable.
@@ -294,36 +336,6 @@ class Fp64(Fp16):
         """
         return (-1e100, 1e100) # Reduced to allow randomization
 
-    def _z3_(self) -> z3.FP:
-        """
-        Get the Z3 representation of the variable.
-
-        :return: The Z3 FP representation of the variable.
-        :rtype: FP
-        """
-        return z3.FP(f"{self._idx_}", _fp_sort_(11, 53))
-
-    def _apply_constraints_(self, solver : z3.Optimize) -> None:
-        """
-        Apply the constraints to the solver.
-
-        :param solver: The optimization solver to apply the constraints to.
-        :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
-        """
-
-        Var._apply_constraints_(self, solver)
-
-        bv = z3.BitVec(f"{self._idx_}", self.width)
-        fp = _fp_sort_(11, 53)
-
-        for b in range(self.width):
-            solver.add_soft(z3.Extract(b,b,bv) == random.randint(0,1), weight=100)
-
-        solver.add(z3.Not(z3.fpIsNaN(self._rand_)))
-        solver.add(z3.Not(z3.fpIsInf(self._rand_)))
-        solver.add(self._rand_ == z3.fpBVToFP(bv, fp))
 
 Half = Fp16
 Float = Fp32

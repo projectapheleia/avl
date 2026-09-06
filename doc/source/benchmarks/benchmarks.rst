@@ -244,6 +244,123 @@ than silently producing a 16 bit value.
 
 None of this changes how objects or variables are used, and no public API changed.
 
+Randomization
+-------------
+
+Constraint solving is the most expensive thing a testbench asks AVL to do, and a
+sequence does it once per item. The work below reduced what a randomization costs
+without changing a single value it produces.
+
+Results
+^^^^^^^
+
+Measured on a packet carrying one of each variable type - logic, unsigned,
+signed, enumerated and floating point - under arithmetic, bitwise and select
+constraints, and on the other shapes a testbench randomizes.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 34 22 22 22
+
+   * - Measurement
+     - Base
+     - Optimised
+     - Change
+   * - Constrained packet
+     - 22 897 us
+     - **19 607 us**
+     - -14.4 %
+   * - Integer fields only
+     - 3 796 us
+     - **2 555 us**
+     - -32.7 %
+   * - Single variable
+     - 1 975 us
+     - **1 275 us**
+     - -35.4 %
+   * - No constraints
+     - 1 438 us
+     - 1 326 us
+     - -7.8 %
+   * - New object each time
+     - 24 214 us
+     - 23 709 us
+     - -2.1 %
+
+.. image:: /images/avl_random_overall.png
+   :align: center
+   :alt: Base versus optimised randomization time for a constrained packet, integer fields only, an unconstrained object, a new object each time, and a single variable.
+
+Where the Time Went
+^^^^^^^^^^^^^^^^^^^
+
+**One draw per variable rather than one per bit.** Randomization asks each bit,
+softly, to match a random draw. Those draws came from a ``random.randint(0, 1)``
+call per bit, where a single ``getrandbits`` call over the whole width gives the
+same bits for a fraction of the cost. The direct draws a variable falls back to
+when the solver does not decide it now go through a helper built on the same call
+rather than through ``random.randint``, which revalidates its arguments every time.
+
+**Clauses kept rather than rebuilt.** Only two clauses can exist for a bit - one
+asking it for zero, one asking it for one - and neither depends on anything that
+changes between randomizations. They are now built once and reused. A variable
+randomized a single time, as a fresh sequence item is, does not pay to fill a
+cache nothing will read: the cache is armed on the second randomization, so the
+first behaves exactly as it did before.
+
+**No clause on a bit that has no choice.** See below.
+
+Free Bit Analysis
+^^^^^^^^^^^^^^^^^
+
+A bit the hard constraints pin to one value cannot be traded against anything.
+Its clause is satisfied in every solution or violated in every one, so it shifts
+every candidate's cost by the same amount and decides nothing. Dropping it leaves
+the result distribution exactly as it was, and takes work off the search.
+
+Before randomizing, AVL now names every bit with a boolean and asks Z3, in one
+question for all of them, which are forced. The answer depends only on the
+object's own hard constraints, so it is worked out once per constraint shape and
+kept. A constraint passed to :doc:`randomize() </modules/avl._core.object>` can pin further bits but never
+unpin one, so the answer stays correct when one is passed.
+
+How much this is worth depends entirely on how tightly the constraints bind:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 28 18 18 18 18
+
+   * - Shape
+     - Bits kept
+     - Every bit
+     - Free bits
+     - Change
+   * - Loosely constrained
+     - 113 of 124
+     - 17 794 us
+     - 17 379 us
+     - -2.3 %
+   * - Tightly constrained
+     - 25 of 112
+     - 5 160 us
+     - **2 260 us**
+     - **-56.2 %**
+
+.. image:: /images/avl_random_freebits.png
+   :align: center
+   :alt: Randomization time with a clause on every bit against a clause on free bits only, for a loosely constrained and a tightly constrained packet.
+
+A packet whose address may fall anywhere in 32 bits has almost no pinned bits and
+gains almost nothing. Hold the same fields to the ranges a real testbench holds
+them to - an address within one page, a burst of one to sixteen, a handful of
+identifiers - and three quarters of their bits are pinned. Constrain tightly and
+this is the largest single win available.
+
+The values are unaffected. Randomizing the same object 400 times from the same
+seed, with the analysis off and then on, gives identical distributions: the same
+288 distinct addresses, the same per bit frequencies, the same set of lengths and
+identifiers.
+
 Running Your Own Measurements
 -----------------------------
 

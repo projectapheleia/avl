@@ -125,11 +125,14 @@ class Enum(Logic):
         :return: The Z3 representation of the variable.
         :rtype: BoolRef | IntNumRef | BitVecNumRef | RatNumRef
         """
-        self.add_constraint(
-            "_c_range_",
-            lambda x: z3.Or([x == v for v in self.values.values()]),
-            hard=True,
-        )
+        # Guarded, because a variable whose Z3 representation is asked for more
+        # than once would otherwise warn about overriding its own range.
+        if "_c_range_" not in self._constraints_[True]:
+            self.add_constraint(
+                "_c_range_",
+                lambda x: z3.Or([x == v for v in self.values.values()]),
+                hard=True,
+            )
         return super()._z3_()
 
     # Type Conversions

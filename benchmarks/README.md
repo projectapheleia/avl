@@ -87,3 +87,41 @@ the same way as the start-up benchmark.
 
 See `objects/results/RESULTS.md` for the results of the object creation
 optimisation work.
+
+## randomization
+
+Measures how long it takes to randomize a constrained transaction — the most
+expensive thing a testbench asks AVL to do, and something a sequence does once per
+item.
+
+```bash
+cd benchmarks/randomization
+./randomization_benchmark.py                     # 1000 randomizations, 3 repeats
+./randomization_benchmark.py -n 200 -r 5
+```
+
+The testbench ([`cocotb/benchmark.py`](randomization/cocotb/benchmark.py)) builds
+each packet once and randomizes it `N` times, timing the loop in-process.
+
+| measurement | what it is |
+| --- | --- |
+| `constrained packet` | logic, uint, int, enum and float fields under arithmetic, bitwise and select constraints, their ranges left wide — the headline figure |
+| `tightly constrained packet` | the same variable types held to narrow ranges, as a real testbench holds them |
+| `integer fields only` | the same shape without the floating point variable |
+| `no constraints` | the same variables with no constraints, the floor |
+| `new object each time` | a new packet built and randomized each time, as a sequence generating items would |
+| `single variable` | one variable randomized on its own |
+
+All figures are microseconds per randomization.
+
+A constrained randomization costs tens of milliseconds, so the default `-n 1000`
+takes a while — use `-n 200` while iterating.
+
+**On reading the numbers.** The scenarios run once each, in order, in a separate
+process, so comparing two saved runs carries both measurement noise and machine
+drift; the spread on the constrained packet is around 5 %. It resolves changes of
+20 % and up cleanly. To settle anything smaller, A/B the two code paths inside one
+process with the rounds interleaved.
+
+See `randomization/results/RESULTS.md` for the results of the randomization
+optimisation work.

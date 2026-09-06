@@ -37,6 +37,17 @@ class Logic(Var):
     overridden by the caller.
     """
 
+    _bit_clause_cache_ = None
+    """Randomization clauses, keyed by bit and value as ``bit << 1 | value``.
+
+    Only two clauses exist per bit and neither depends on anything that changes
+    between randomizations, so a variable randomized repeatedly builds each of
+    them once. None until the variable has been randomized once: a variable
+    randomized a single time, as a fresh sequence item is, would otherwise pay to
+    fill a cache nothing ever reads. Held per variable rather than globally, so
+    that the clauses are released with it.
+    """
+
     def __copy__(self):
         """
         Copy the Logic - always make a copy to ensure randomness is preserved.
@@ -122,22 +133,44 @@ class Logic(Var):
         """
         return z3.BitVec(f"{self._idx_}", self.width)
 
-    def _apply_constraints_(self, solver : z3.Optimize) -> None:
+    def _apply_randomization_(self, solver : z3.Optimize,
+                              free_bits : list[int]|None = None) -> None:
         """
-        Apply the constraints to the solver.
+        Add the soft constraints that spread this variable over its legal values.
+
+        Each bit is asked, softly, to match a random draw. The solver satisfies as
+        many of those as the hard constraints allow, and that is what spreads the
+        result rather than returning whichever legal value it finds first.
 
         :param solver: The optimization solver to apply the constraints to.
         :type solver: Optimize
-        :param add_randomization: Add constraints for randomization
-        :type add_randomization: bool
+        :param free_bits: The bits worth asking about. None means every bit. A bit
+            the hard constraints pin to a single value is not worth one - see
+            Object._free_bits_.
+        :type free_bits: list[int], optional
         """
+        # One draw for the whole variable. A randint per bit costs an order of
+        # magnitude more for exactly the same randomness.
+        drawn = random.getrandbits(self.width)
+        clauses = self._bit_clause_cache_
+        rand = self._rand_
+        bits = range(self.width) if free_bits is None else free_bits
 
-        super()._apply_constraints_(solver)
+        if clauses is None:
+            # First randomization of this variable. Build the clauses without
+            # keeping them, and arm the cache for a second one.
+            self._bit_clause_cache_ = {}
+            for b in bits:
+                solver.add_soft(z3.Extract(b, b, rand) == ((drawn >> b) & 1), weight=100)
+            return
 
-        # Add soft constraint randomizing each bit
-        for b in range(self.width):
-            bv = random.randint(0,1)
-            solver.add_soft(z3.Extract(b,b,self._rand_) == bv, weight=100)
+        for b in bits:
+            value = (drawn >> b) & 1
+            key = b << 1 | value
+            clause = clauses.get(key)
+            if clause is None:
+                clause = clauses[key] = z3.Extract(b, b, rand) == value
+            solver.add_soft(clause, weight=100)
 
     def __getitem__(self, key):
         if isinstance(key, slice):

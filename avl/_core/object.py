@@ -634,6 +634,121 @@ class Object:
             if name in self._constraints_[t]:
                 del self._constraints_[t][name]
 
+    _FREE_BITS_AFTER_ = 4
+    """Randomizations of one constraint shape before the free bit analysis is
+    worth the solve it costs. An object randomized once - a sequence item,
+    typically - never pays for it; a loop randomizing the same object pays once.
+    """
+
+    _free_bits_cache_ = None
+    """The free bit analysis of this object's constraints, once it has been made.
+
+    Held per object rather than globally: the analysis is made over this object's
+    own Z3 variables, and keeping it here means the expressions it was keyed by
+    stay alive for exactly as long as the answer does. None until the object is
+    first randomized - see ``_free_bits_``.
+    """
+
+    def _free_bits_(self, assertions : list, vars : list) -> dict[int, list[int]]|None:
+        """
+        The bits of each variable that the hard constraints leave a choice about.
+
+        Randomization asks every bit, softly, to match a random draw. A bit the
+        constraints pin to one value can never be traded against anything - its
+        clause is either satisfied in every solution or violated in every one - so
+        dropping it moves every candidate's cost by the same amount and leaves the
+        distribution exactly as it was. What it does change is how much the search
+        has to carry: constraints that hold a 32 bit field to a few thousand values
+        pin most of its bits.
+
+        Only the hard constraints decide this, and only the object's own: a
+        constraint passed to randomize() can pin further bits but never unpin one,
+        so an answer worked out without them stays correct, and stays reusable
+        across calls that pass different ones.
+
+        :param assertions: The object's hard constraints, as Z3 expressions.
+        :type assertions: list
+        :param vars: The variables taking part in the solve.
+        :type vars: list
+        :return: The free bits of each variable, keyed by its Z3 expression id, or
+            None to ask about every bit. A variable present with an empty list is
+            pinned outright and gets no clauses at all.
+        :rtype: dict[int, list[int]], optional
+        """
+        # Only bit vectors can be taken apart this way; a float's Z3 variable is
+        # a float, and is randomized through its IEEE pattern instead.
+        sized = [v for v in vars if isinstance(v._rand_, z3.BitVecRef)]
+        if not sized:
+            return None
+
+        # Identity of the constraint shape. A constraint whose arguments include a
+        # variable that is not being randomized has that variable's current value
+        # built into it, so the same lambdas do not always give the same
+        # expressions - the ids are what notice.
+        key = (tuple(sorted(e.get_id() for e in assertions)),
+               tuple(v._rand_.get_id() for v in sized))
+
+        entry = self._free_bits_cache_
+        if entry is None or entry["key"] != key:
+            # First sighting of this shape. The expressions are kept because the
+            # key is made of their ids, and Z3 reuses the id of an expression that
+            # has been collected.
+            self._free_bits_cache_ = {"key": key, "exprs": assertions,
+                                      "count": 1, "free": None}
+            return None
+
+        if entry["free"] is None:
+            entry["count"] += 1
+            if entry["count"] <= self._FREE_BITS_AFTER_:
+                return None
+            entry["free"] = self._pinned_bits_(assertions, sized)
+
+        return entry["free"]
+
+    @staticmethod
+    def _pinned_bits_(assertions : list, vars : list) -> dict[int, list[int]]|None:
+        """
+        Ask Z3 which bits its constraints force, and report the rest.
+
+        Every bit is named with a boolean and the question asked once for all of
+        them, because asking bit by bit costs an order of magnitude more.
+
+        :param assertions: The hard constraints, as Z3 expressions.
+        :type assertions: list
+        :param vars: The variables to examine, all of them bit vectors.
+        :type vars: list
+        :return: The free bits of each variable, keyed by its Z3 expression id, or
+            None if the question could not be answered.
+        :rtype: dict[int, list[int]], optional
+        """
+        solver = z3.Solver()
+        solver.add(assertions)
+
+        labels = {}
+        for v in vars:
+            rand = v._rand_
+            for b in range(v.width):
+                label = f"_fb_{rand}_{b}"
+                labels[label] = (rand.get_id(), b)
+                solver.add(z3.Bool(label) == (z3.Extract(b, b, rand) == 1))
+
+        status, implied = solver.consequences([], [z3.Bool(name) for name in labels])
+        if status != z3.sat:
+            return None
+
+        forced = set()
+        for implication in implied:
+            literal = implication.arg(1)
+            if literal.decl().name() == "not":
+                literal = literal.arg(0)
+            forced.add(str(literal))
+
+        free = {v._rand_.get_id(): [] for v in vars}
+        for label, (rand_id, bit) in labels.items():
+            if label not in forced:
+                free[rand_id].append(bit)
+        return free
+
     def pre_randomize(self) -> None:
         """
         Pre-randomization function.
@@ -776,6 +891,11 @@ class Object:
         # Create Solver
         solver = new_solver()
 
+        # Which bits are worth a randomization clause. Taken before the dynamic
+        # constraints are added, so that the answer holds across calls that pass
+        # different ones - see _free_bits_.
+        free_bits = self._free_bits_(list(solver.assertions()), list(constrained_vars.values()))
+
         # Add dynamic constraints
         if hard is not None:
             for c in hard:
@@ -788,6 +908,11 @@ class Object:
                 fn, *args = c
                 _args = [resolve_arg(a) for a in args]
                 solver.add_soft(fn(*_args), weight=1000)
+
+        # Spread the variables over their legal values
+        for v in constrained_vars.values():
+            v._apply_randomization_(
+                solver, None if free_bits is None else free_bits.get(v._rand_.get_id()))
 
         # Add randomization and solve
         solver.push()
