@@ -568,3 +568,192 @@ aborting the run - a new example the released version cannot run, for instance.
 See
 `benchmarks/examples/README.md <https://github.com/projectapheleia/avl/blob/main/benchmarks/examples/README.md>`_
 for the rest, including what is pinned into the released environment and why.
+
+Against Other Frameworks
+------------------------
+
+The examples benchmark compares AVL against an earlier AVL. The comparison
+benchmark compares it against the alternatives: the same workload written four
+times - in SystemVerilog, in pyuvm with pyvsc, against the released ``avl-core``
+from PyPI, and against the AVL in your checkout - and run through the same
+simulator, the same cocotb flow and the same testbench harness.
+
+The Workload
+^^^^^^^^^^^^
+
+Sixteen classes, each declaring the same representative set of variables - four
+unsigned logic vectors of 32, 16, 8 and 8 bits, and two signed 16 bit integers -
+under the same eleven constraints:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 30 50
+
+   * - Constraint
+     - Category
+     - What it says
+   * - ``c_addr``
+     - arithmetic
+     - ``addr`` lies in this class's 16 MB window
+   * - ``c_align``
+     - arithmetic, modulo
+     - ``addr`` is aligned to 4, 8 or 16
+   * - ``c_page``
+     - bitwise, shift
+     - ``addr >> 24`` is this class's page
+   * - ``c_len``
+     - arithmetic range
+     - ``1 <= len <= lmax``
+   * - ``c_kind``
+     - list
+     - ``kind`` is one of four values
+   * - ``c_mask``
+     - bitwise, and
+     - bits of ``mask`` held at zero
+   * - ``c_mask_kind``
+     - bitwise, xor, across two fields
+     - the low nibble of ``mask`` is tied to ``kind``
+   * - ``c_delta``
+     - signed arithmetic
+     - ``-dmax <= delta <= dmax``, and not zero
+   * - ``c_level``
+     - signed arithmetic
+     - ``-vmax <= level <= vmax``
+   * - ``c_sum``
+     - signed arithmetic, across two fields
+     - ``delta + level >= 0``
+   * - ``c_kind0``
+     - implication
+     - the first ``kind`` implies a single beat
+
+The sixteen differ from one another in the constants those constraints are
+written with - the page, the alignment, the set of kinds, the bounds. That is
+deliberate: an implementation may analyse a class once and reuse the answer, and
+a testbench declaring one sequence item per bus never gets the benefit of that.
+A fresh item is built for every iteration, and the classes are taken in turn.
+
+Every item is checked against all eleven constraints after it is randomized, in
+every flavour, so a flavour that draws an illegal value fails rather than being
+reported as fast.
+
+Results
+^^^^^^^
+
+256 items, one of each class in turn, sixteen times round. Medians of five runs
+on Verilator 5.040, cocotb 2.1.0, pyuvm 5.0.0, pyvsc 0.9.5 and Python 3.12.3.
+
+.. image:: /images/avl_comparison.png
+   :align: center
+   :alt: Total run time and randomization cost per item for AVL, the released avl-core, pyuvm with pyvsc and SystemVerilog.
+
+The first figure is the whole simulation, start to finish - process start-up,
+elaboration, cocotb bringup, the class definitions, the loop and the
+randomization. It is what you wait for.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 20 20 30
+
+   * - Flavour
+     - Total run
+     - Relative
+     - Peak RSS
+   * - **avl** (this repository)
+     - **2.87 s**
+     - 1.00x
+     - 266 MB
+   * - ``avl-core`` 1.0.1 (released)
+     - 3.89 s
+     - 1.35x
+     - 322 MB
+   * - pyuvm 5.0.0 with pyvsc
+     - 3.94 s
+     - 1.37x
+     - 251 MB
+   * - SystemVerilog, Verilator
+     - 4.59 s
+     - 1.60x
+     - 283 MB
+
+Running the same testbench over the same number of clock cycles with the
+randomization disabled and subtracting it leaves the randomization on its own.
+Start-up, elaboration and the loop cancel out.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 30 15 20 15 20
+
+   * - Flavour
+     - Baseline
+     - Randomizing
+     - Per item
+     - Relative
+   * - **avl** (this repository)
+     - 0.92 s
+     - **1.96 s**
+     - **7.64 ms**
+     - 1.00x
+   * - ``avl-core`` 1.0.1 (released)
+     - 1.84 s
+     - 2.05 s
+     - 8.01 ms
+     - 1.05x
+   * - pyuvm 5.0.0 with pyvsc
+     - 1.32 s
+     - 2.62 s
+     - 10.22 ms
+     - 1.34x
+   * - SystemVerilog, Verilator
+     - 0.82 s
+     - 3.77 s
+     - 14.72 ms
+     - 1.93x
+
+Both figures are worth having, and they do not always agree. The released
+``avl-core`` randomizes within 5 % of the working copy here, but costs a third
+more over the whole run, because the start-up work described earlier in this page
+is paid before the first item is built. Read the second table for the solver and
+the first for the testbench.
+
+The SystemVerilog figures are Verilator's, which solves constraints by calling
+out to an external SMT solver. They are not a statement about SystemVerilog
+constrained random in general - a commercial simulator with a solver built into it
+will place differently - and the benchmark runs on any simulator cocotb supports,
+so it is worth re-running on yours.
+
+Running it
+^^^^^^^^^^
+
+.. code-block:: shell
+
+    $ source ./avl.sh                      # from the repository root
+    $ cd benchmarks/comparison
+    $ ./comparison_benchmark.py --dry-run  # show the plan, run nothing
+    $ ./comparison_benchmark.py            # 16 classes, 256 items, 3 repeats
+    $ ./comparison_benchmark.py -N 1,4,16 -r 5
+
+Each run writes ``results/report.html``, ``RESULTS.md``, ``summary.csv`` and
+``results.json``, each carrying the machine, the operating system, the simulator
+version and the version of all four things compared.
+
+What it controls for
+^^^^^^^^^^^^^^^^^^^^
+
+Every flavour compiles the same RTL, is built and run through cocotb's makefiles,
+drives the same clock and reset and does one item per rising edge. The only
+difference is who does the work - the RTL under an ``ifdef``, or the testbench.
+The classes are ordinary source you can read, one file per flavour:
+``rtl/classes.svh``, ``cocotb/classes_avl.py`` and ``cocotb/classes_pyuvm.py``.
+
+pyuvm, pyvsc and the released ``avl-core`` are installed by the benchmark into
+virtual environments of their own inside ``benchmarks/comparison/``, with
+``cocotb`` pinned to the version your environment uses so that the simulator
+interface is identical everywhere. Nothing in AVL depends on pyuvm.
+
+Timing samples every process in the run's process group, not just the simulator.
+A SystemVerilog simulator solves constraints in a separate solver process which it
+never reaps, so ``getrusage()`` credits it with none of that CPU time.
+
+See
+`benchmarks/comparison/README.md <https://github.com/projectapheleia/avl/blob/main/benchmarks/comparison/README.md>`_
+for the workload, the measurement and the options in full.

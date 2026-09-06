@@ -1,0 +1,7 @@
+# Released avl-core and local pyuvm / pyvsc environments built by comparison_benchmark.py
+.venv-released-*/
+.venv-pyuvm/
+# Generated classes, per-flavour run directories and simulator build directories
+work/
+# Recorded runs and reports
+results/

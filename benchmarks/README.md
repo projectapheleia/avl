@@ -23,10 +23,12 @@ make distclean   # everything, including the results
 `clean` leaves each benchmark's `results/` directory alone, so recorded runs and
 write-ups survive it.
 
-`distclean` removes them, along with the released-package environments the
-scripted benchmarks build. `results/` is not tracked by git, so a `distclean` is
-the end of any recorded run and any write-up in there — take a copy first if you
-want to keep one. The environments cost a download and an install to recreate.
+`distclean` removes them, along with the virtual environments the scripted
+benchmarks build — the released `avl-core` that `examples` and `comparison`
+compare against, and the pyuvm and pyvsc installation `comparison` measures.
+`results/` is not tracked by git, so a `distclean` is the end of any recorded run
+and any write-up in there — take a copy first if you want to keep one. The
+environments cost a download and an install to recreate.
 
 ## startup
 
@@ -171,3 +173,57 @@ imports pandas, so without both the numbers describe the order the measurements
 ran in rather than the thing being measured.
 
 See `logging/results/RESULTS.md` for the results of the logging optimisation work.
+
+## comparison
+
+Measures the same thing as `randomization` — the cost of creating, constraining
+and randomizing an item — but against the alternatives rather than against a
+previous version of AVL. Four implementations of one workload are compared:
+the AVL in this repository, the latest released `avl-core` from PyPI, pyuvm with
+pyvsc, and SystemVerilog classes solved by the simulator.
+
+```bash
+cd benchmarks/comparison
+./comparison_benchmark.py --dry-run   # show the plan, run nothing
+./comparison_benchmark.py             # 16 classes, 256 items, 3 repeats each
+./comparison_benchmark.py -N 1,4,16 -r 5
+```
+
+This is the long one: it builds two virtual environments the first time it runs,
+and compiles a model per flavour. Both are reused afterwards, and neither is part
+of any measurement, but a first run takes a few minutes before it starts timing
+anything.
+
+| flavour | what it is |
+| --- | --- |
+| `sv` | SystemVerilog classes, randomized by the simulator's own constraint solver |
+| `pyuvm` | pyvsc `randobj`s, randomized from the `run_phase` of a `pyuvm` test |
+| `avl-<version>` | the latest released `avl-core` from PyPI, under the version it is |
+| `avl` | the AVL in this repository |
+
+The workload is sixteen classes, each declaring four unsigned logic vectors and
+two signed integers under eleven arithmetic, bitwise and related constraints, and
+each written with different constants — so no implementation can analyse one
+class and reuse the answer for the rest, which is the position a testbench
+declaring one sequence item per bus is in. They are ordinary source, one file per
+flavour: [`rtl/classes.svh`](comparison/rtl/classes.svh),
+[`cocotb/classes_avl.py`](comparison/cocotb/classes_avl.py) and
+[`cocotb/classes_pyuvm.py`](comparison/cocotb/classes_pyuvm.py).
+
+Every flavour compiles the same RTL, runs through the same cocotb flow and does
+one item per clock edge. Two figures are reported for each: the total run time of
+the simulation, which is what a user waits for, and the randomization on its own,
+which is that with a run of the same testbench with the randomization disabled
+subtracted from it. The second is in microseconds per item.
+
+The benchmark installs what it needs itself: the released `avl-core` and pyuvm
+with pyvsc each go into a virtual environment of their own inside
+`benchmarks/comparison/`, with `cocotb` pinned to the version the local
+environment uses. Nothing in the repository depends on pyuvm.
+
+Reports are written to `comparison/results/` on every run — `report.html`,
+`RESULTS.md`, `summary.csv` and `results.json` — each carrying the machine, the
+simulator and the version of all four things compared.
+
+See [`comparison/README.md`](comparison/README.md) for the workload, the
+measurement and the options in full.

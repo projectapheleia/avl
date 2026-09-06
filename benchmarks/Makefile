@@ -54,6 +54,6 @@ clean: $(CLEANS)
 # of them there is.
 .PHONY: distclean
 distclean: clean
-	rm -rf $(foreach d, $(SCRIPTED), $(d)/.venv-released-*)
+	rm -rf $(foreach d, $(SCRIPTED), $(d)/.venv-*)
 	rm -rf $(foreach d, $(BENCHMARKS), $(d)/results)
 	echo "Distclean complete"
