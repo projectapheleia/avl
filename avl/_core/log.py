@@ -71,7 +71,7 @@ class Log:
     @staticmethod
     def _avl_callback(record: logging.LogRecord) -> None:
         """
-        Handles logging callback for AVL (Automated Vehicle Logging) system.
+        Handles logging callback for AVL (Apheleia Verification Library) system.
 
         :param record: logging.LogRecord
             The log record to be processed. Contains details such as the log level,
