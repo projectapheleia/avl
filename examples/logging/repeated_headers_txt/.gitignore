@@ -1,0 +1,3 @@
+# The log this example writes. sim.mk's clean rule globs some of these
+# extensions but not all of them, and none of them belong in the repository.
+avl_log.*

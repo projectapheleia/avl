@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+ - [#95](https://github.com/projectapheleia/avl/issues/95) Log(): the final buffer was written twice. Both shutdown paths flush - the cocotb test summary and an atexit handler - and flushing did not drain the buffer, so whatever was still held at the first was appended again by the second. Flushing now drains it, outside the log file check so that the buffer stays bounded by the flush level even when no log file is set.
+ - [#97](https://github.com/projectapheleia/avl/issues/97) Log(): txt, md and rst repeated the table header on every flush. Only the first chunk is headed now. In markdown the repeat was more than cosmetic - a second header and separator row ended the table, so every record after it stopped being a row. csv, json and yaml were already correct.
+
+### Changed
+ - Log(): txt, md and rst now use fixed column widths (`_COLUMN_WIDTHS_`), so the chunks written by successive flushes line up as one continuous table instead of each being sized to its own content. Values wider than their column are wrapped.
+
 ## [v1.1.0] - 2026-09-06
 
 ### Added

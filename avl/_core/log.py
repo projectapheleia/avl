@@ -26,6 +26,22 @@ _ANSI_ESCAPE_ = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
 a log file. Compiled once, because it is applied to every message logged.
 """
 
+_COLUMN_WIDTHS_ = {
+    "Time": 16,
+    "Level": 8,
+    "Group": 24,
+    "Message": 100,
+    "Filename": 100,
+    "LineNo": 8,
+}
+_DEFAULT_COLUMN_WIDTH_ = 24
+"""How wide to write each column of the formats laid out in columns.
+
+Fixed, rather than sized to the records in hand, because the log is written a
+chunk at a time under a single heading - a chunk sized to its own content could
+not line up with the one before it. Anything wider is wrapped onto more lines.
+"""
+
 
 class _avl_callback_handler_(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
@@ -101,14 +117,6 @@ class Log:
 
         if len(Log._logdata["Time"]) >= Log._flush_level:
             Log._flush_log()
-            Log._logdata = {
-                "Time": [],
-                "Level": [],
-                "Group": [],
-                "Message": [],
-                "Filename": [],
-                "LineNo": [],
-            }
 
     @staticmethod
     def _override_cocotb_logging() -> None:
@@ -164,13 +172,38 @@ class Log:
         return logger
 
     @staticmethod
+    def _fixed_columns(d) -> tuple:
+        """
+        The headings and widths that pin down the column layout of a chunk.
+
+        tabulate sizes a column to the wider of its heading and its content, so
+        padding the heading out to the fixed width and capping the content there
+        with ``maxcolwidths`` - which wraps whatever is too long - lays every
+        chunk out the same, whatever that chunk happens to hold.
+
+        :param d: The chunk being flushed.
+        :type d: pandas.DataFrame
+        :return: The padded headings, and the width of each column.
+        :rtype: tuple
+        """
+        widths = [_COLUMN_WIDTHS_.get(c, _DEFAULT_COLUMN_WIDTH_) for c in d.columns]
+        return [str(c).ljust(w) for c, w in zip(d.columns, widths)], widths
+
+    @staticmethod
     def _flush_log() -> None:
         """
         Flushes the log data to the specified log file.
         The log data is written in the format specified by the file extension of the log file.
         Supported formats include CSV, JSON, YAML, TXT, Markdown, and reStructuredText (RST).
         The log data is converted to a pandas DataFrame before writing.
+
+        Flushing drains the buffer, so flushing twice writes the records once.
+        Both shutdown paths installed by :meth:`_override_cocotb_logging` call
+        this, and either of them may be the one that runs.
         """
+
+        if len(Log._logdata["Time"]) == 0:
+            return
 
         if Log._logfile is not None:
             fileext = os.path.splitext(Log._logfile)[1]
@@ -189,22 +222,61 @@ class Log:
                         d.to_dict(orient="records"), f, default_flow_style=False, width=float("inf")
                     )
             elif fileext == ".txt":
+                headers, widths = Log._fixed_columns(d)
+                view = tabulate.tabulate(
+                    d.values.tolist(), headers=headers, tablefmt="grid", maxcolwidths=widths
+                )
                 with open(Log._logfile, mode) as f:
-                    f.write(
-                        tabulate.tabulate(d.values.tolist(), headers=d.columns, tablefmt="grid")
-                    )
+                    # After the first chunk, drop the top border, the heading and
+                    # the rule beneath it: the rule that closed the last row of
+                    # the previous chunk already opens this one.
+                    f.write(view if Log._first else "\n".join(view.split("\n")[3:]))
+                    f.write("\n")
             elif fileext == ".md":
+                headers, widths = Log._fixed_columns(d)
+                markdown_view = d.to_markdown(index=False, headers=headers, maxcolwidths=widths)
+                assert markdown_view is not None
                 with open(Log._logfile, mode) as f:
-                    markdown_view = d.to_markdown(index=False)
-                    assert markdown_view is not None
-                    f.write(markdown_view)
+                    # As above, dropping the heading and the |---| row beneath
+                    # it. A table has one of each, and a second pair part way
+                    # down ends it - everything after would stop being a table.
+                    f.write(
+                        markdown_view if Log._first else "\n".join(markdown_view.split("\n")[2:])
+                    )
+                    f.write("\n")
             elif fileext == ".rst":
-                with open(Log._logfile, mode) as f:
-                    f.write(tabulate.tabulate(d, headers="keys", tablefmt="rst", showindex=False))
+                headers, widths = Log._fixed_columns(d)
+                view = tabulate.tabulate(
+                    d, headers=headers, tablefmt="rst", showindex=False, maxcolwidths=widths
+                )
+                lines = view.split("\n")
+                if Log._first:
+                    with open(Log._logfile, mode) as f:
+                        f.write(view + "\n")
+                else:
+                    # The same slice, but a simple table is terminated by its
+                    # bottom border, so the rows go over the border that closed
+                    # the previous chunk rather than after it. lines[0] is that
+                    # border, and it is only ever "=" and spaces.
+                    os.truncate(Log._logfile, os.path.getsize(Log._logfile) - (len(lines[0]) + 1))
+                    with open(Log._logfile, "a") as f:
+                        f.write("\n".join(lines[3:]) + "\n")
             else:
                 raise ValueError(f"Unsupported file extension {fileext}")
 
             Log._first = False
+
+        # Outside the check above, because the buffer has to stay bounded by the
+        # flush level whether or not anyone asked for a log file - and a log file
+        # is opt-in.
+        Log._logdata = {
+            "Time": [],
+            "Level": [],
+            "Group": [],
+            "Message": [],
+            "Filename": [],
+            "LineNo": [],
+        }
 
     @staticmethod
     def set_logfile(logfile: str) -> None:
