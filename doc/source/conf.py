@@ -3,6 +3,7 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 import os
+import re
 import sys
 from unittest import mock
 
@@ -21,7 +22,13 @@ sys.path.insert(0, os.path.abspath('../../avl'))
 project = 'avl'
 copyright = '2025, apheleia'
 author = 'apheleia'
-release = '0.1'
+
+# Read out of pyproject.toml rather than written here, so that it cannot fall
+# behind the way a literal did - this said 0.1 from the first release until
+# 1.1.1. Not taken from the installed package, because an editable install
+# reports the version it was last installed at, not the one in the tree.
+with open(os.path.join(os.path.dirname(__file__), '..', '..', 'pyproject.toml')) as f:
+    release = re.search(r'^version = "(.*?)"', f.read(), re.MULTILINE).group(1)
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration

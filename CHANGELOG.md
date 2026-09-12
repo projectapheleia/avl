@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [v1.1.1] - 2026-09-12
 
 ### Fixed
  - [#95](https://github.com/projectapheleia/avl/issues/95) Log(): the final buffer was written twice. Both shutdown paths flush - the cocotb test summary and an atexit handler - and flushing did not drain the buffer, so whatever was still held at the first was appended again by the second. Flushing now drains it, outside the log file check so that the buffer stays bounded by the flush level even when no log file is set.
