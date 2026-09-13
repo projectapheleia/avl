@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+ - README and documentation: added [avl-jtag](https://github.com/projectapheleia/avl-jtag) (JTAG UVC) and [avl-spi](https://github.com/projectapheleia/avl-spi) (SPI UVC) to the Additional Libraries / UVCs lists.
+
 ## [v1.1.1] - 2026-09-12
 
 ### Fixed
