@@ -1,7 +1,7 @@
 Z3 Constraints
 ==============
 
-AVL uses `Z3 <https://microsoft.github.io/z3guide/programming/Z3%20Python%20-%20Readonly/Introduction/>`_ to implement a full constraint\
+AVL uses `Z3 <https://microsoft.github.io/z3guide/programming/Z3%20Python/Introduction/>`_ to implement a full constraint \
 solver.
 
 Previous Python implementations have use `python-constraints <https://python-constraint.github.io/python-constraint/>`_ which is a perfectly \
@@ -28,10 +28,10 @@ In addition real (float) types are supported, and implemented to common accuraci
     - double precision (64bit)
 
 
-This documents will not go into details of the `Z3 Solver <https://microsoft.github.io/z3guide/programming/Z3%20Python%20-%20Readonly/Introduction/>`_ \
+This documents will not go into details of the `Z3 Solver <https://microsoft.github.io/z3guide/programming/Z3%20Python/Introduction/>`_ \
 as they provide excellent documentation.
 
-Constraints should be defined using `lamda functions <https://realpython.com/python-lambda/>`_. This means the function is evaluated when the randomize function is called \
+Constraints should be defined using `lambda functions <https://realpython.com/python-lambda/>`_. This means the function is evaluated when the randomize function is called \
 not when the constraint is defined.
 
 Constraints can be applied directly to a variable or within the class that variable is instanced. Constraints local to the variable are always inherited by the class.
