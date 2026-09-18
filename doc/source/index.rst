@@ -26,6 +26,7 @@ Apheleia Verification Library Documentation
    trace/trace
    coverage/coverage
    coverage/coverage_report
+   mutation_testing/mutation_testing
    templates/templates
    visualization/visualization
    benchmarks/benchmarks

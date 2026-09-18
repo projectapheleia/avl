@@ -46,7 +46,7 @@ pip install .[dev]
 
 Alternatively if you want to create a [virtual environment](https://docs.python.org/3/library/venv.html) rather than install globally a script is provided. This will install, with edit privileges to local virtual environment.
 
-This script assumes you have  [Verilator](https://www.veripool.org/verilator/), [GTKWave](https://gtkwave.sourceforge.net/) and [Graphviz](https://graphviz.org/download/) installed, so all examples and documentation will build out of the box.
+This script assumes you have  [Verilator](https://www.veripool.org/verilator/), [GTKWave](https://gtkwave.sourceforge.net/) and [Graphviz](https://graphviz.org/download/) installed, so all examples and documentation will build out of the box. [Yosys](https://yosyshq.net/yosys/) is optional; the mutation testing examples use it to prove each mutation changes the design, and skip that stage without it. The script warns about anything it cannot find.
 
 
 ```sh

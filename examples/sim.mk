@@ -6,7 +6,10 @@
 # Makefile
 
 # HDL source files
-VERILOG_SOURCES      += $(CURDIR)/rtl/example_hdl.sv
+# AVL_RTL lets an example build a generated copy of its RTL (see
+# mutation_testing) without otherwise departing from the standard flow.
+AVL_RTL              ?= $(CURDIR)/rtl/example_hdl.sv
+VERILOG_SOURCES      += $(AVL_RTL)
 VERILOG_INCLUDE_DIRS +=
 COMPILE_ARGS         +=
 

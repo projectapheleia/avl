@@ -10,6 +10,12 @@ then
     echo "WARNING : Graphviz could not be found. Please install Graphviz and ensure it is in your PATH (see https://graphviz.org/download/) if you want to generate docs and run all examples."
 fi
 
+# Yosys setup
+if ! command -v yosys &> /dev/null
+then
+    echo "WARNING : Yosys could not be found. Please install Yosys and ensure it is in your PATH (see https://yosyshq.net/yosys/) if you want the mutation testing examples to prove each mutation changes the design. Without it the equivalence stage is skipped and a surviving mutation cannot be told apart from one no testbench could ever catch."
+fi
+
 # Python setup
 
 pushd $AVL_ROOT 1>/dev/null
