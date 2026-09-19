@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('../../avl'))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'avl'
-copyright = '2025, apheleia'
+copyright = '2025-2026, apheleia'
 author = 'apheleia'
 
 # Read out of pyproject.toml rather than written here, so that it cannot fall
