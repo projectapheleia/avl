@@ -43,4 +43,5 @@ All Modules
    avl._core.visualization
    avl.templates._vanilla
    avl.tools.coverage_analysis
+   avl.tools.mutation_testing
    avl.tools.trace_analysis

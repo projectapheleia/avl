@@ -1,0 +1,7 @@
+# Everything under here is generated. The mutants and the report come from
+# avl-mutation-testing, the build trees from the simulator, and .results from
+# the regression in this directory. One file covers every example because git
+# applies a .gitignore to the whole subtree below it.
+mutants/
+sim_build/
+.results/

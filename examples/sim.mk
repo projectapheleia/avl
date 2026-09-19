@@ -6,7 +6,10 @@
 # Makefile
 
 # HDL source files
-VERILOG_SOURCES      += $(CURDIR)/rtl/example_hdl.sv
+# AVL_RTL lets an example build a generated copy of its RTL (see
+# mutation_testing) without otherwise departing from the standard flow.
+AVL_RTL              ?= $(CURDIR)/rtl/example_hdl.sv
+VERILOG_SOURCES      += $(AVL_RTL)
 VERILOG_INCLUDE_DIRS +=
 COMPILE_ARGS         +=
 
@@ -18,6 +21,17 @@ export PYTHONPATH
 
 # MODULE is the basename of the Python test file(s)
 MODULE               ?= example
+
+# One seed for every example, so that a run is the same run every time. Without
+# this cocotb draws a fresh seed from the clock per simulation, and an example
+# whose stimulus only occasionally reaches a corner passes or fails depending on
+# which random numbers that run happened to draw - which makes a failure hard to
+# reproduce and a pass worth little. Override it to sweep:
+#
+#     make sim COCOTB_RANDOM_SEED=42
+#
+COCOTB_RANDOM_SEED   ?= 1
+export COCOTB_RANDOM_SEED
 
 # Questa / ModelSim workaround
 VSIM_ARGS            += -lib work

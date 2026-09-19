@@ -21,6 +21,61 @@ To upgrade follow the instructions given on the link above.
 
 ---
 
+## 🧬 Mutation Testing
+
+Coverage tells you the testbench *ran* a line. It does not tell you the testbench would have *noticed* had that line been wrong.
+
+[Mutation testing](https://en.wikipedia.org/wiki/Mutation_testing) — known in hardware as functional qualification — answers the second question. `avl-mutation-testing` takes your golden RTL, writes out a set of copies each carrying exactly one deliberate defect, and re-runs your existing tests against every one. A mutant the tests still pass is a hole in the verification environment: a class of bug that could ship unnoticed. The testbench needs no knowledge of any of this — a mutant is ordinary RTL that happens to be wrong.
+
+```sh
+avl-mutation-testing --source rtl/*.sv --top my_module --types arith,compare --count 10
+```
+
+### Supported mutations
+
+Classes are selected with `--types`, and `avl-mutation-testing --list-types` prints them with the syntax each one matches.
+
+| Class | Mutation | Example |
+| --- | --- | --- |
+| `arith` | Swaps an arithmetic operator | `a + b` → `a - b` |
+| `bitwise` | Swaps a bitwise operator | `a & b` → `a \| b` |
+| `compare` | Swaps a comparison | `a < b` → `a <= b` |
+| `logical` | Swaps a logical operator | `a && b` → `a \|\| b` |
+| `shift` | Swaps a shift direction | `a << 1` → `a >> 1` |
+| `unary` | Removes a unary operator | `~a` → `a` |
+| `operand` | Reverses a non-commutative operator's operands | `a - b` → `b - a` |
+| `condition` | Holds a branch open, holds it shut, and nudges the comparisons it is built from | `if (en)` → `if (1'b1)`, `if (1'b0)` |
+| `statement` | Drops a registered assignment, so the register holds | `y <= d;` → `;` |
+| `pipeline` | Gives a registered signal an extra stage, so it arrives a cycle late | `y <= d;` → `y` one cycle late |
+| `sign` | Negates the value assigned to a signed variable | `y = a + 1;` → `y = -(a + 1);` |
+| `width` | Takes the top bit off a packed declaration | `logic [8:0] t` → `logic [7:0] t` |
+| `array_packed` | Reverses a packed dimension, renumbering the bits | `logic [7:0] a` → `logic [0:7] a` |
+| `array_unpacked` | Reverses an unpacked dimension, reordering the elements | `logic a [0:3]` → `logic a [3:0]` |
+| `blocking` | Makes a nonblocking assignment blocking | `x <= a;` → `x = a;` |
+| `nonblocking` | Makes a blocking assignment nonblocking | `x = a;` → `x <= a;` |
+
+Every line a mutation changes carries an `/* AVL MUTATION - ... */` comment, so a mutant that turns up in an editor, a debugger or a waveform cannot be mistaken for the golden source. Generation also writes `mutations.html`, a report explaining each mutation in its source context.
+
+### Equivalent mutants
+
+Some defects cannot change behaviour — flipping the `+` in `a + 0` to a `-` is still `a`. No testbench can ever catch those, so scoring them as survivors reports verification holes that are not there. Where [Yosys](https://yosyshq.net/yosys/) is installed each mutation is proved to change the design before any simulation time is spent on it, and the ones that do not are reported as equivalent and left out of the score. Yosys is optional; without it the stage is skipped.
+
+### Background and tools
+
+| Link | |
+| --- | --- |
+| [Mutation testing](https://en.wikipedia.org/wiki/Mutation_testing) | Overview of the technique |
+| [Hints on Test Data Selection](https://doi.org/10.1109/C-M.1978.218136) | DeMillo, Lipton & Sayward, *IEEE Computer* 11(4), 1978 — where the idea starts |
+| [An Analysis and Survey of the Development of Mutation Testing](https://doi.org/10.1109/TSE.2010.62) | Jia & Harman, *IEEE Transactions on Software Engineering* 37(5) — the standard survey |
+| [pyslang](https://pypi.org/project/pyslang/) / [slang](https://github.com/MikePopoloski/slang) | SystemVerilog frontend used to locate mutation sites |
+| [Yosys](https://yosyshq.net/yosys/) | Proves each mutation changes the design |
+| [CocoTB](https://docs.cocotb.org/en/stable/) | Runs the testbench against each mutant |
+| [Verilator](https://www.veripool.org/verilator/) | Default simulator for the examples |
+
+Nineteen worked examples live under [examples/mutation_testing](examples/mutation_testing), one per mutation class plus a hierarchical ALU, a synchronous FIFO, and a design with a provably equivalent mutant. See [its README](examples/mutation_testing/README.md) for the full walkthrough, and [the documentation](doc/source/mutation_testing/mutation_testing.rst) for the complete option reference.
+
+---
+
 ## 📦 Installation
 
 ### Using `pip`
@@ -46,7 +101,7 @@ pip install .[dev]
 
 Alternatively if you want to create a [virtual environment](https://docs.python.org/3/library/venv.html) rather than install globally a script is provided. This will install, with edit privileges to local virtual environment.
 
-This script assumes you have  [Verilator](https://www.veripool.org/verilator/), [GTKWave](https://gtkwave.sourceforge.net/) and [Graphviz](https://graphviz.org/download/) installed, so all examples and documentation will build out of the box.
+This script assumes you have  [Verilator](https://www.veripool.org/verilator/), [GTKWave](https://gtkwave.sourceforge.net/) and [Graphviz](https://graphviz.org/download/) installed, so all examples and documentation will build out of the box. [Yosys](https://yosyshq.net/yosys/) is optional; the mutation testing examples use it to prove each mutation changes the design, and skip that stage without it. The script warns about anything it cannot find.
 
 
 ```sh
