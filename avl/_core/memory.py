@@ -8,22 +8,56 @@ from collections.abc import Callable
 from typing import Literal, TypeAlias
 
 from ._lazy import lazy_import
+from .factory import Factory
+from .object import Object
 
 bincopy = lazy_import("bincopy")
 pd = lazy_import("pandas")
 
 Endianness: TypeAlias = Literal['little', 'big']
 
-class Memory:
+class Memory(Object):
+    """
+    Sparse byte memory model.
 
-    def __init__(self, width : int = 32) -> None:
+    A memory is an :class:`Object`, so the factory can replace it by type:
+    ``Factory.set_override_by_type(Memory, MyMemory)`` makes every
+    ``Memory(width=...)`` return a ``MyMemory``, including the ones a library
+    builds internally. A memory is built by width rather than by name, so it
+    has no instance path and ``set_override_by_type`` is the only override
+    that applies to it.
+    """
+
+    def __new__(cls, *args, **kwargs):
+        """
+        Create a memory, honouring a factory override by type.
+
+        :class:`Object` keys the factory on the name the object is built with.
+        A memory is built by width and usually without a name, so the lookup is
+        done here, by type only.
+        """
+        target = cls if Factory._empty else Factory.get_by_type(cls)
+        obj = object.__new__(target)
+
+        if target is not cls and not issubclass(target, cls):
+            obj.__init__(*args, **kwargs)
+
+        return obj
+
+    def __init__(self, width : int = 32, name : str = "memory", parent : Object|None = None) -> None:
         """
         Initialize the memory model.
 
         :param width: Width of the memory in bits (default is 32).
         :type width: int
+        :param name: Name of the memory (default is "memory").
+        :type name: str
+        :param parent: Parent object, if the memory belongs to a component.
+        :type parent: Object, optional
         :raises ValueError: If width is not a positive integer.
         """
+        super().__init__(name, parent)
+
         if width <= 0 or width % 8 != 0:
             raise ValueError("Width must be a positive integer and a multiple of 8.")
 
@@ -167,6 +201,62 @@ class Memory:
         :raises ValueError: Always raised to indicate a memory miss.
         """
         raise KeyError(f"Miss at {address}")
+
+    def compare(self, rhs: "Memory", verbose: bool = False, bidirectional: bool = True) -> bool:
+        """
+        Compare the contents of this memory with another memory.
+
+        Two memories compare equal when they have the same width and endianness
+        and hold the same byte at every address either of them has touched. A
+        byte one memory holds and the other has never touched is read through
+        the other's initialization function, without storing it, so a compare
+        leaves both memories as they were. Ranges and the initialization
+        function are configuration rather than contents and are not compared.
+
+        The field by field comparison of :class:`Object` is not suitable here:
+        a read initializes bytes lazily, so two memories with the same contents
+        can hold different dictionaries.
+
+        :param rhs: Memory to compare with.
+        :type rhs: Memory
+        :param verbose: Whether to log a passing comparison.
+        :type verbose: bool
+        :param bidirectional: Accepted for signature compatibility with
+            :any:`Object.compare`. The comparison walks the union of both
+            memories, so it is symmetric and the flag has no effect.
+        :type bidirectional: bool
+        :return: True if the contents match, False otherwise.
+        :rtype: bool
+        """
+        if not isinstance(rhs, Memory):
+            self.error(f"Cannot compare a Memory with {type(rhs).__name__}")
+            return False
+
+        if self.width != rhs.width:
+            self.error(f"Width mismatch ({self.width} != {rhs.width})")
+            return False
+
+        if self.endianness != rhs.endianness:
+            self.error(f"Endianness mismatch ({self.endianness} != {rhs.endianness})")
+            return False
+
+        retVal = True
+        addresses = self.memory.keys() | rhs.memory.keys()
+        for address in sorted(addresses):
+            lhs_byte = self.memory.get(address)
+            if lhs_byte is None:
+                lhs_byte = self.init_fn(address)
+            rhs_byte = rhs.memory.get(address)
+            if rhs_byte is None:
+                rhs_byte = rhs.init_fn(address)
+            if lhs_byte != rhs_byte:
+                self.error(f"Mismatch at 0x{address:x} (0x{lhs_byte:02x} != 0x{rhs_byte:02x})")
+                retVal = False
+
+        if retVal and verbose:
+            self.info(f"Memory comparison passed ({len(addresses)} bytes)")
+
+        return retVal
 
     def read(self, address: int, num_bytes : int|None = None, rotated : bool = False) -> int:
         """
