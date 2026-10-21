@@ -16,10 +16,9 @@
 # do repeat their headers cannot quietly regress this one.
 
 
-import yaml
-
 import avl
 import cocotb
+import yaml
 
 _LOGFILE_ = "avl_log.yaml"
 _FLUSH_LEVEL_ = 10

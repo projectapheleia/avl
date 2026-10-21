@@ -187,7 +187,7 @@ class Log:
         :rtype: tuple
         """
         widths = [_COLUMN_WIDTHS_.get(c, _DEFAULT_COLUMN_WIDTH_) for c in d.columns]
-        return [str(c).ljust(w) for c, w in zip(d.columns, widths)], widths
+        return [str(c).ljust(w) for c, w in zip(d.columns, widths, strict=True)], widths
 
     @staticmethod
     def _flush_log() -> None:
