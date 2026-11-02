@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+ - `avl.VcdDriver`: replay VCD captures onto the DUT at their recorded times or cycle by cycle on a testbench clock. Supports individual signal and scope bindings, output exclusions, replay windows, and run phase objections. Timed and clocked examples under `examples/vcd_driver` replay a capture of a hundred additions and check the results against a model.
+ - `avl.Vcd`: read VCD signals, aliases and value changes, find signals with `lookup()`, list signals with `scope()`, look up values at a timestamp, find clock edges, and merge signal timelines.
+
 ## [v1.2.0] - 2026-09-19
 
 ### Added

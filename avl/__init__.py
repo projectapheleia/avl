@@ -146,6 +146,18 @@ from ._core import (
     Uint64 as Uint64,
 )
 from ._core import (
+    Vcd as Vcd,
+)
+from ._core import (
+    VcdClockGroup as VcdClockGroup,
+)
+from ._core import (
+    VcdDriver as VcdDriver,
+)
+from ._core import (
+    VcdSignal as VcdSignal,
+)
+from ._core import (
     Visualization as Visualization,
 )
 from ._core import (

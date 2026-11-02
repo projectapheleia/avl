@@ -15,6 +15,7 @@ the verification process, the implementation does not enforce a specific flow.
    sequences/sequences
    sequencer
    driver
+   vcd_driver
    monitor
    scoreboard
 

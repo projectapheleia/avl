@@ -32,6 +32,8 @@ from .struct import Struct
 from .trace import Trace
 from .transaction import Transaction
 from .uint import Uint, Uint8, Uint16, Uint32, Uint64
+from .vcd import Vcd, VcdSignal
+from .vcd_driver import VcdClockGroup, VcdDriver
 from .visualization import Visualization
 
 # Enable logging
@@ -57,6 +59,10 @@ __all__ = [
     "Transaction",
     "Component",
     "Driver",
+    "VcdDriver",
+    "VcdClockGroup",
+    "Vcd",
+    "VcdSignal",
     "Sequencer",
     "Monitor",
     "Model",

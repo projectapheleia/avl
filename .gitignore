@@ -27,6 +27,8 @@ venv/
 sim_build/
 results.xml
 *.vcd
+# The VCD driver examples replay a checked-in capture
+!examples/vcd_driver/stimulus/*.vcd
 *.fsdb
 
 # vcs

@@ -76,6 +76,27 @@ Nineteen worked examples live under [examples/mutation_testing](examples/mutatio
 
 ---
 
+## ⏪ Replaying captures
+
+A testbench does not always need to invent its stimulus. `avl.VcdDriver` replays a [Value Change Dump](https://en.wikipedia.org/wiki/Value_change_dump) — a capture from an earlier simulation, another testbench, or a logic analyser on real silicon — onto the DUT, and the monitor, model and scoreboard check the result exactly as they would under a sequence.
+
+```python
+# Timed: every bound signal, clock and reset included, at exactly the time the file records it
+drv.add_signal("tb.clk", dut.clk)
+drv.add_signal("tb.a", dut.a)
+
+# Clocked: the testbench drives dut.clk; the group follows it cycle for cycle
+grp = drv.add_clock("tb.clk", dut.clk)
+grp.add_signal("tb.a", dut.a)
+
+# Or bind a whole scope, leaving the outputs the capture recorded to the DUT
+grp.add_scope("tb", dut, exclude=("valid_out", "c"))
+```
+
+Two examples under [examples/vcd_driver](examples/vcd_driver) replay one capture of a hundred additions onto an adder, once with the capture's own clock and once at twice its frequency on the testbench's. The reader behind the driver, `avl.Vcd`, is available on its own for inspecting a capture. See the [VCD driver guide](doc/source/methodology/vcd_driver.rst) for setup, signal binding, replay windows and completion handling.
+
+---
+
 ## 📦 Installation
 
 ### Using `pip`

@@ -40,6 +40,8 @@ All Modules
    avl._core.transaction
    avl._core.uint
    avl._core.var
+   avl._core.vcd
+   avl._core.vcd_driver
    avl._core.visualization
    avl.templates._vanilla
    avl.tools.coverage_analysis
