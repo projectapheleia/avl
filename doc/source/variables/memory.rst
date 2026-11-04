@@ -21,6 +21,8 @@ In addition it supports:
 
     - Write support strobes - obeying endianness
 
+- Comparison of two memories : :any:`Memory.compare`
+
 - Export and import from multiple formats : :any:`Memory.export_to_file`, :any:`Memory.import_from_file`
 
     - Verilog Hex (readmemh) and Verilog Binary (readmemb)
@@ -36,4 +38,17 @@ Example
 -------
 
 .. literalinclude:: ../../../examples/memory/simple/cocotb/example.py
+    :language: python
+
+Factory override and comparison
+-------------------------------
+
+The memory is an :doc:`avl.Object </modules/avl._core.object>`, so :any:`Factory.set_override_by_type` replaces it, \
+including a memory a library builds internally. A memory is built by width rather than by name, so it has no \
+instance path and an override by instance does not apply to it.
+
+:any:`Memory.compare` compares two memories byte by byte over every address either of them has touched, \
+reading an untouched byte through the initialization function of its memory without storing it.
+
+.. literalinclude:: ../../../examples/memory/override/cocotb/example.py
     :language: python
